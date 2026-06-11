@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="38" fill="#E04F4F"/>
+  <circle cx="96" cy="96" r="70" fill="white" opacity="0.15"/>
+  <circle cx="96" cy="96" r="62" fill="none" stroke="white" stroke-width="4" opacity="0.6"/>
+  <line x1="96" y1="34" x2="96" y2="96" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <line x1="96" y1="96" x2="136" y2="72" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="96" cy="96" r="6" fill="white"/>
+  <text x="96" y="148" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" font-weight="800" fill="white">RELOJ</text>
+</svg>

@@ -1,0 +1,25 @@
+{
+  "name": "Reloj Visual PIE",
+  "short_name": "Reloj Visual",
+  "description": "Temporizador visual con pictogramas para apoyo de anticipación en aula",
+  "start_url": "/reloj-visual/",
+  "scope": "/reloj-visual/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
