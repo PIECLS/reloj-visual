@@ -95,38 +95,18 @@ export default function RelojVisual(){
     }).catch(()=>{});
   },[]);
 
-  // Cargar rutina guardada (espera a que customPictos esté listo)
-  useEffect(()=>{
-    if(routineLoaded.current) return;
-    try{
-      const raw=localStorage.getItem("rv-routine");
-      if(!raw) return;
-      const steps=JSON.parse(raw);
-      // Reconstruir img de pasos con pictograma propio
-      const restored=steps.map(s=>{
-        if(s.customId){
-          const found=customPictos.find(p=>p.id===s.customId);
-          return found?{...s,img:found.img}:null;
-        }
-        return s;
-      }).filter(Boolean);
-      if(restored.length){setRoutine(restored);routineLoaded.current=true;}
-    }catch(e){}
-  // eslint-disable-next-line
-  },[customPictos]);
-
-  // Guardar rutina cada vez que cambia
-  useEffect(()=>{
-    if(!routineLoaded.current&&routine.length===0) return;
-    try{
-      // Guardar sin el blob img (se reconstruye desde IndexedDB al cargar)
-      const slim=routine.map(s=>s.img?{...s,img:undefined}:s);
-      localStorage.setItem("rv-routine",JSON.stringify(slim));
-    }catch(e){}
-  },[routine]);
   const[routine,setRoutine]=useState([]);
   const[stepIdx,setStepIdx]=useState(-1);
-  const routineLoaded=useRef(false);
+
+  // Rutinas guardadas: [{id, name, steps[]}]
+  const[savedRoutines,setSavedRoutines]=useState(()=>{
+    try{ return JSON.parse(localStorage.getItem("rv-saved-routines")||"[]"); }
+    catch(e){ return []; }
+  });
+  useEffect(()=>{
+    try{ localStorage.setItem("rv-saved-routines",JSON.stringify(savedRoutines)); }
+    catch(e){}
+  },[savedRoutines]);
 
   const[totalSecs,setTotalSecs]=useState(15*60);
   const[remaining,setRemaining]=useState(15*60);
@@ -254,6 +234,7 @@ export default function RelojVisual(){
 
   /* ---- rutina ---- */
   const[draft,setDraft]=useState({key:"p3",mins:10});
+  const[routineName,setRoutineName]=useState("");
   const allOptions=[
     ...PICTOS.map((p,i)=>({key:"p"+i,label:`${p.e} ${p.n}`,picto:p})),
     ...customPictos.map(p=>({key:"c"+p.id,label:`🖼️ ${p.n}`,picto:p})),
@@ -264,11 +245,31 @@ export default function RelojVisual(){
     const isCustom=draft.key.startsWith("c");
     const step={id:Date.now(),e:p.e,img:p.img,n:p.n,mins:Math.min(60,Math.max(1,draft.mins))};
     if(isCustom) step.customId=p.id;
-    routineLoaded.current=true;
     setRoutine(r=>[...r,step]);
   };
   const removeStep=(id)=>setRoutine(r=>r.filter(s=>s.id!==id));
   const startRoutine=()=>{if(!routine.length)return;setModal(null);loadStep(0,false);};
+
+  const saveRoutine=()=>{
+    if(!routine.length) return;
+    const name=routineName.trim()||`Rutina ${savedRoutines.length+1}`;
+    // Guardar sin el blob img (se reconstituye desde IndexedDB via customId)
+    const slim=routine.map(s=>s.img?{...s,img:undefined}:s);
+    setSavedRoutines(r=>[...r,{id:Date.now(),name,steps:slim}]);
+    setRoutineName("");
+  };
+  const deleteSavedRoutine=(id)=>setSavedRoutines(r=>r.filter(s=>s.id!==id));
+  const loadSavedRoutine=(saved)=>{
+    // Reconstituir img de pasos con pictograma propio
+    const restored=saved.steps.map(s=>{
+      if(s.customId){
+        const found=customPictos.find(p=>p.id===s.customId);
+        return found?{...s,img:found.img}:s;
+      }
+      return s;
+    });
+    setRoutine(restored);
+  };
 
   /* ---- estado visual ---- */
   const warnState=
@@ -697,6 +698,8 @@ export default function RelojVisual(){
             <p style={{color:T.dim,fontSize:13,marginTop:-8,marginBottom:12}}>
               Agrega actividades en orden. Al terminar una, avanza a la siguiente automáticamente.
             </p>
+
+            {/* Agregar paso */}
             <div className="rv-row">
               <select className="rv-input" style={{width:"auto",flex:1}} value={draft.key}
                 onChange={e=>setDraft({...draft,key:e.target.value})}>
@@ -708,6 +711,8 @@ export default function RelojVisual(){
               <span style={{color:T.dim,fontWeight:800,fontSize:13}}>min</span>
               <button className="btn" onClick={addStep}>+</button>
             </div>
+
+            {/* Pasos actuales */}
             {routine.map((s,i)=>(
               <div className="rv-step" key={s.id}>
                 <strong style={{color:T.dim,minWidth:16}}>{i+1}.</strong>
@@ -718,10 +723,39 @@ export default function RelojVisual(){
               </div>
             ))}
             {routine.length===0&&<p style={{color:T.dim,fontSize:14}}>Aún no hay actividades.</p>}
+
+            {/* Guardar con nombre */}
+            {routine.length>0&&(
+              <div className="rv-row" style={{marginTop:14}}>
+                <input className="rv-input" style={{flex:1,width:"auto",textAlign:"left",paddingLeft:12}}
+                  placeholder="Nombre de la rutina…" value={routineName}
+                  onChange={e=>setRoutineName(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&saveRoutine()}/>
+                <button className="btn" onClick={saveRoutine}>💾 Guardar</button>
+              </div>
+            )}
+
+            {/* Rutinas guardadas */}
+            {savedRoutines.length>0&&(
+              <>
+                <p style={{color:T.dim,fontSize:12,fontWeight:800,margin:"16px 0 6px"}}>RUTINAS GUARDADAS</p>
+                {savedRoutines.map(sr=>(
+                  <div className="rv-step" key={sr.id}>
+                    <span style={{fontWeight:700,flex:1}}>{sr.name}</span>
+                    <span style={{color:T.dim,fontSize:12,whiteSpace:"nowrap"}}>{sr.steps.length} pasos</span>
+                    <button className="btn" style={{padding:"6px 12px",minHeight:36,fontSize:13}}
+                      onClick={()=>loadSavedRoutine(sr)}>Cargar</button>
+                    <button className="x" onClick={()=>deleteSavedRoutine(sr.id)}>✕</button>
+                  </div>
+                ))}
+              </>
+            )}
+
             <div style={{display:"flex",gap:10,marginTop:14}}>
               <button className="btn primary" style={{flex:1}} onClick={startRoutine} disabled={!routine.length}>
-                ▶ Cargar rutina
+                ▶ Iniciar rutina
               </button>
+              <button className="btn" onClick={()=>{setRoutine([]);setStepIdx(-1);}}>Limpiar</button>
               <button className="btn" onClick={()=>setModal(null)}>Cerrar</button>
             </div>
           </div>
