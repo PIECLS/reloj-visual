@@ -73,14 +73,36 @@ function tone(freq,dur,gainV,type="sine",when=0){
 }
 function playEnd(m){if(m==="off")return;if(m==="suave"){tone(523,.7,.05);tone(659,.9,.05,"sine",.35);}else{tone(880,1.2,.12,"triangle");tone(1760,.8,.04,"sine",.05);}}
 function playWarn(m){if(m==="off")return;tone(587,.45,m==="suave"?.03:.06,"sine");}
+function speak(text){
+  try{
+    if(!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang="es-CL";u.rate=0.92;u.pitch=1;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+const MILESTONES=[
+  {key:"m5", secs:300, minTotal:330, text:"Quedan cinco minutos"},
+  {key:"m3", secs:180, minTotal:210, text:"Quedan tres minutos"},
+  {key:"m2", secs:120, minTotal:150, text:"Quedan dos minutos"},
+  {key:"m1", secs:60,  minTotal:90,  text:"Queda un minuto"},
+  {key:"s30",secs:30,  minTotal:60,  text:"Quedan treinta segundos"},
+  {key:"s5", secs:5,   minTotal:30,  text:"Quedan cinco segundos"},
+];
 
 /* ============================================================ */
 export default function RelojVisual(){
   const[wedgeKey,setWedgeKey]=useState("rojo");
   const[sound,setSound]=useState("suave");
   const[reducedMotion,setReducedMotion]=useState(false);
-  const[warn5On,setWarn5On]=useState(true);
-  const[warn1On,setWarn1On]=useState(true);
+  const[speechOn,setSpeechOn]=useState(false);
+  const[activeHitos,setActiveHitos]=useState({m5:true,m3:false,m2:false,m1:true,s30:false,s5:false});
+  const toggleHito=(k)=>setActiveHitos(h=>({...h,[k]:!h[k]}));
+  // Compatibilidad con lógica visual de color
+  const warn5On=activeHitos.m5;
+  const warn1On=activeHitos.m1;
   const[inverted,setInverted]=useState(false);
   const dir=inverted?-1:1;
   const baseWedge=WEDGE_COLORS.find(w=>w.k===wedgeKey).c;
@@ -131,8 +153,12 @@ export default function RelojVisual(){
     const id=setInterval(()=>{
       const rem=Math.max(0,(endAtRef.current-Date.now())/1000);
       const prev=prevRemRef.current;
-      if(warn5On&&prev>300&&rem<=300&&totalSecs>330)playWarn(sound);
-      if(warn1On&&prev>60&&rem<=60&&totalSecs>90)playWarn(sound);
+      MILESTONES.forEach(({key,secs,minTotal,text})=>{
+        if(activeHitos[key]&&prev>secs&&rem<=secs&&totalSecs>minTotal){
+          playWarn(sound);
+          if(speechOn&&sound!=="off") speak(text);
+        }
+      });
       prevRemRef.current=rem;
       setRemaining(rem);
       if(rem<=0){clearInterval(id);setRunning(false);playEnd(sound);setDone(true);}
@@ -807,19 +833,26 @@ export default function RelojVisual(){
               </div>
             </div>
 
-            <div className="rv-row">
-              <span className="rv-label">Aviso 5 min</span>
-              <div className="rv-seg">
-                <button className={warn5On?"on":""} onClick={()=>setWarn5On(true)}>Sí</button>
-                <button className={!warn5On?"on":""} onClick={()=>setWarn5On(false)}>No</button>
-              </div>
-            </div>
-
-            <div className="rv-row">
-              <span className="rv-label">Aviso 1 min</span>
-              <div className="rv-seg">
-                <button className={warn1On?"on":""} onClick={()=>setWarn1On(true)}>Sí</button>
-                <button className={!warn1On?"on":""} onClick={()=>setWarn1On(false)}>No</button>
+            <div className="rv-row" style={{alignItems:"flex-start"}}>
+              <span className="rv-label" style={{paddingTop:6}}>Avisos</span>
+              <div style={{display:"flex",flexDirection:"column",gap:8,flex:1}}>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {MILESTONES.map(({key,text})=>(
+                    <button key={key} onClick={()=>toggleHito(key)}
+                      className={"btn"+(activeHitos[key]?" primary":"")}
+                      style={{minHeight:38,padding:"6px 12px",fontSize:13}}>
+                      {text.replace("Quedan ","").replace("Queda ","").replace(" minutos"," min").replace(" minuto"," min").replace(" segundos"," seg")}
+                    </button>
+                  ))}
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:13,fontWeight:800,color:T.dim}}>Voz</span>
+                  <div className="rv-seg">
+                    <button className={speechOn?"on":""} onClick={()=>{setSpeechOn(true);speak("Avisos de voz activados");}} >Sí</button>
+                    <button className={!speechOn?"on":""} onClick={()=>setSpeechOn(false)}>No</button>
+                  </div>
+                  <span style={{fontSize:12,color:T.dim}}>Requiere sonido activado</span>
+                </div>
               </div>
             </div>
 
