@@ -73,17 +73,17 @@ export default function ModoSemaforo({ sound, reducedMotion }) {
       const rem = Math.max(0, (endAtRef.current - Date.now()) / 1000);
       setTiempoR(rem);
       if (rem <= 0) {
-        clearInterval(id);
         playEnd(sound);
         const modo = config.modoAvance;
         const cur  = activaRef.current;
         if (modo === "C") {
+          clearInterval(id);
           setRunning(false);
         } else {
           const idx  = ORDEN_AVANCE.indexOf(cur);
           const next = ORDEN_AVANCE[idx + 1];
           if (next) {
-            // avanzar a la siguiente luz
+            // avanzar — el interval sigue corriendo
             setActiva(next);
             activaRef.current = next;
             playWarn(sound);
@@ -91,9 +91,8 @@ export default function ModoSemaforo({ sound, reducedMotion }) {
             setTiempoR(dur);
             endAtRef.current = Date.now() + dur * 1000;
           } else {
-            // llegamos a rojo
             if (modo === "B") {
-              // bucle: volver a verde
+              // bucle — el interval sigue corriendo
               setActiva("verde");
               activaRef.current = "verde";
               playWarn(sound);
@@ -101,7 +100,8 @@ export default function ModoSemaforo({ sound, reducedMotion }) {
               setTiempoR(dur);
               endAtRef.current = Date.now() + dur * 1000;
             } else {
-              // modo A: detener
+              // modo A: llegamos a rojo, detener
+              clearInterval(id);
               setRunning(false);
             }
           }
@@ -379,15 +379,15 @@ export default function ModoSemaforo({ sound, reducedMotion }) {
                 style={{
                   width:"100%", textAlign:"left", padding:"12px 14px",
                   marginBottom:8, borderRadius:14, cursor:"pointer",
-                  border: `1.5px solid ${editConfig.modoAvance===m ? T.accent : T.line}`,
-                  background: editConfig.modoAvance===m ? T.accent+"22" : T.panel,
+                  border: `1.5px solid ${editConfig.modoAvance===m ? "#4A90D9" : T.line}`,
+                  background: editConfig.modoAvance===m ? "#4A90D922" : T.panel,
                   color: T.text, fontWeight: editConfig.modoAvance===m ? 800 : 600,
                   fontSize:13,
                 }}>
                 <span style={{
                   display:"inline-block", width:20, height:20,
-                  borderRadius:"50%", border:`2px solid ${editConfig.modoAvance===m ? T.accent : T.dim}`,
-                  background: editConfig.modoAvance===m ? T.accent : "transparent",
+                  borderRadius:"50%", border:`2px solid ${editConfig.modoAvance===m ? "#4A90D9" : T.dim}`,
+                  background: editConfig.modoAvance===m ? "#4A90D9" : "transparent",
                   marginRight:10, verticalAlign:"middle",
                 }}/>
                 {MODO_LABELS[m]}
@@ -408,7 +408,7 @@ export default function ModoSemaforo({ sound, reducedMotion }) {
                 style={{
                   width:48, height:28, borderRadius:999, border:"none",
                   cursor:"pointer", flexShrink:0,
-                  background: editConfig.mostrarCrono ? T.accent : T.line,
+                  background: editConfig.mostrarCrono ? "#4A90D9" : T.line,
                   transition:"background .2s", position:"relative",
                 }}>
                 <div style={{

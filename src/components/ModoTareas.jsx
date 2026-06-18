@@ -92,6 +92,17 @@ export default function ModoTareas({
   };
   const guardarAjustes = () => {
     setAjustesTareas(editAjustes);
+    // Recalcular el timer inmediatamente si cambia visTiempo y hay tareas con tiempo
+    const tareasConTiempo = tareas.filter(t => t.mins);
+    if (tareasConTiempo.length > 0 && !running) {
+      if (editAjustes.visTiempo === "acumulado") {
+        const total = Math.min(60, tareas.reduce((s, t) => s + (t.mins || 0), 0));
+        loadMinutes(total, false);
+      } else {
+        const activa = tareaActiva >= 0 ? tareas[tareaActiva] : tareasConTiempo[0];
+        if (activa?.mins) loadMinutes(activa.mins, false);
+      }
+    }
     setModalAjustes(false);
   };
 
@@ -555,8 +566,8 @@ export default function ModoTareas({
                 style={{
                   width:"100%", textAlign:"left", padding:"12px 14px",
                   marginBottom:8, borderRadius:14, cursor:"pointer",
-                  border:`1.5px solid ${editAjustes.alTerminar === op.val ? T.accent : T.line}`,
-                  background: editAjustes.alTerminar === op.val ? T.accent+"22" : T.panel,
+                  border:`1.5px solid ${editAjustes.alTerminar === op.val ? "#4A90D9" : T.line}`,
+                  background: editAjustes.alTerminar === op.val ? "#4A90D922" : T.panel,
                   color:T.text, fontSize:13,
                 }}>
                 <div style={{fontWeight:800,marginBottom:3}}>{op.label}</div>
@@ -578,8 +589,8 @@ export default function ModoTareas({
                 style={{
                   width:"100%", textAlign:"left", padding:"12px 14px",
                   marginBottom:8, borderRadius:14, cursor:"pointer",
-                  border:`1.5px solid ${editAjustes.visTiempo === op.val ? T.accent : T.line}`,
-                  background: editAjustes.visTiempo === op.val ? T.accent+"22" : T.panel,
+                  border:`1.5px solid ${editAjustes.visTiempo === op.val ? "#4A90D9" : T.line}`,
+                  background: editAjustes.visTiempo === op.val ? "#4A90D922" : T.panel,
                   color:T.text, fontSize:13,
                 }}>
                 <div style={{fontWeight:800,marginBottom:3}}>{op.label}</div>
