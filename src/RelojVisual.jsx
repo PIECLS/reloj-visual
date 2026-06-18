@@ -91,8 +91,9 @@ export default function RelojVisual(){
   // Cargar pictogramas guardados al iniciar
   useEffect(()=>{
     dbGetAll().then(items=>{
+      console.log("[RelojVisual] pictogramas en IndexedDB:", items.length, items);
       if(items.length) setCustomPictos(items);
-    }).catch(()=>{});
+    }).catch(err=>console.error("[RelojVisual] error cargando IndexedDB:", err));
   },[]);
   const[routine,setRoutine]=useState([]);
   const[stepIdx,setStepIdx]=useState(-1);
@@ -202,7 +203,9 @@ export default function RelojVisual(){
         const name=file.name.replace(/\.[^.]+$/,"").slice(0,24)||"Imagen";
         const picto={id:Date.now()+Math.random(),img:reader.result,n:name};
         setCustomPictos(c=>[...c,picto]);
-        dbPut(picto).catch(()=>{});
+        dbPut(picto)
+          .then(()=>console.log("[RelojVisual] pictograma guardado:", picto.n))
+          .catch(err=>console.error("[RelojVisual] error guardando pictograma:", err));
       };
       reader.readAsDataURL(file);
     });
