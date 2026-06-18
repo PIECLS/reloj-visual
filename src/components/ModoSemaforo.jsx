@@ -2,9 +2,9 @@ import { useState } from "react";
 import { T, textOn, playWarn } from "../shared";
 
 const LUCES = [
-  { key:"verde",    color:"#46A877", label:"Seguir",   desc:"Todo bien, continúa" },
-  { key:"amarillo", color:"#E3C334", label:"Atención", desc:"Prepárate para cambiar" },
   { key:"rojo",     color:"#E04F4F", label:"Parar",    desc:"Detente, espera" },
+  { key:"amarillo", color:"#E3C334", label:"Atención", desc:"Prepárate para cambiar" },
+  { key:"verde",    color:"#46A877", label:"Seguir",   desc:"Todo bien, continúa" },
 ];
 
 export default function ModoSemaforo({ sound, reducedMotion }) {

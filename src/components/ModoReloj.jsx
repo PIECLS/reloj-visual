@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { T, WEDGE_COLORS, MILESTONES, textOn, CX, CY, R, polar, wedgePath, fmt, playEnd, playWarn, speak } from "../shared";
+import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, fmt } from "../shared";
+import useTimer from "../hooks/useTimer";
 import ModalPicker from "./ModalPicker";
 import ModalRutina from "./ModalRutina";
 import ModalAjustes from "./ModalAjustes";
@@ -22,39 +23,16 @@ export default function ModoReloj({
   const [activity, setActivity] = useState({ e:"🧩", n:"Trabajo en mesa" });
   const [routine, setRoutine] = useState([]);
   const [stepIdx, setStepIdx] = useState(-1);
-
-  const [totalSecs, setTotalSecs] = useState(15*60);
-  const [remaining, setRemaining] = useState(15*60);
-  const [running, setRunning] = useState(false);
   const [viewMode, setViewMode] = useState("restante");
-  const [done, setDone] = useState(false);
-  const [minInput, setMinInput] = useState("15");
   const [modal, setModal] = useState(null);
 
-  const endAtRef = useRef(null);
-  const prevRemRef = useRef(remaining);
   const svgRef = useRef(null);
   const dragRef = useRef(false);
 
-  /* ---- tick ---- */
-  useEffect(()=>{
-    if(!running) return;
-    endAtRef.current = Date.now()+remaining*1000;
-    const id = setInterval(()=>{
-      const rem = Math.max(0,(endAtRef.current-Date.now())/1000);
-      const prev = prevRemRef.current;
-      MILESTONES.forEach(({key,secs,minTotal,text})=>{
-        if(activeHitos[key]&&prev>secs&&rem<=secs&&totalSecs>minTotal){
-          playWarn(sound);
-          if(speechOn&&sound!=="off") speak(text);
-        }
-      });
-      prevRemRef.current = rem;
-      setRemaining(rem);
-      if(rem<=0){ clearInterval(id); setRunning(false); playEnd(sound); setDone(true); }
-    },200);
-    return ()=>clearInterval(id);
-  },[running]); // eslint-disable-line
+  const {
+    totalSecs, remaining, running, done, setDone,
+    minInput, setMinInput, setMinutes, loadMinutes, start, pause, reset,
+  } = useTimer({ sound, activeHitos, speechOn });
 
   const hasNext = stepIdx>=0 && stepIdx<routine.length-1;
   useEffect(()=>{
@@ -67,24 +45,12 @@ export default function ModoReloj({
     const st = routine[idx]; if(!st) return;
     setStepIdx(idx);
     setActivity({ e:st.e, img:st.img, n:st.n });
-    const secs = st.mins*60;
-    setTotalSecs(secs); setRemaining(secs);
-    prevRemRef.current = secs;
-    setMinInput(String(st.mins));
-    setDone(false); setRunning(!!autostart);
-  },[routine]);
+    loadMinutes(st.mins, autostart);
+  },[routine, loadMinutes]); // eslint-disable-line
 
   const goNextStep = (autostart) => {
     if(hasNext) loadStep(stepIdx+1,autostart);
     else { setDone(false); setStepIdx(-1); }
-  };
-
-  const setMinutes = (mins) => {
-    const m = Math.min(60,Math.max(1,Math.round(mins)));
-    const secs = m*60;
-    setTotalSecs(secs); setRemaining(secs);
-    prevRemRef.current = secs;
-    setMinInput(String(m)); setDone(false);
   };
 
   /* ---- arrastre ---- */
@@ -116,10 +82,6 @@ export default function ModoReloj({
   };
   const onPointerUp = () => { dragRef.current = false; };
 
-  /* ---- controles ---- */
-  const start = () => { if(remaining<=0) setMinutes(Number(minInput)||15); setDone(false); setRunning(true); };
-  const pause = () => setRunning(false);
-  const reset = () => { setRunning(false); setDone(false); setRemaining(totalSecs); prevRemRef.current=totalSecs; };
   const toggleFS = () => {
     if(!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(()=>{});
     else document.exitFullscreen?.();
