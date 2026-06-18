@@ -91,12 +91,42 @@ export default function RelojVisual(){
   // Cargar pictogramas guardados al iniciar
   useEffect(()=>{
     dbGetAll().then(items=>{
-      console.log("[RelojVisual] pictogramas en IndexedDB:", items.length, items);
       if(items.length) setCustomPictos(items);
-    }).catch(err=>console.error("[RelojVisual] error cargando IndexedDB:", err));
+    }).catch(()=>{});
   },[]);
+
+  // Cargar rutina guardada (espera a que customPictos esté listo)
+  useEffect(()=>{
+    if(routineLoaded.current) return;
+    try{
+      const raw=localStorage.getItem("rv-routine");
+      if(!raw) return;
+      const steps=JSON.parse(raw);
+      // Reconstruir img de pasos con pictograma propio
+      const restored=steps.map(s=>{
+        if(s.customId){
+          const found=customPictos.find(p=>p.id===s.customId);
+          return found?{...s,img:found.img}:null;
+        }
+        return s;
+      }).filter(Boolean);
+      if(restored.length){setRoutine(restored);routineLoaded.current=true;}
+    }catch(e){}
+  // eslint-disable-next-line
+  },[customPictos]);
+
+  // Guardar rutina cada vez que cambia
+  useEffect(()=>{
+    if(!routineLoaded.current&&routine.length===0) return;
+    try{
+      // Guardar sin el blob img (se reconstruye desde IndexedDB al cargar)
+      const slim=routine.map(s=>s.img?{...s,img:undefined}:s);
+      localStorage.setItem("rv-routine",JSON.stringify(slim));
+    }catch(e){}
+  },[routine]);
   const[routine,setRoutine]=useState([]);
   const[stepIdx,setStepIdx]=useState(-1);
+  const routineLoaded=useRef(false);
 
   const[totalSecs,setTotalSecs]=useState(15*60);
   const[remaining,setRemaining]=useState(15*60);
@@ -203,9 +233,7 @@ export default function RelojVisual(){
         const name=file.name.replace(/\.[^.]+$/,"").slice(0,24)||"Imagen";
         const picto={id:Date.now()+Math.random(),img:reader.result,n:name};
         setCustomPictos(c=>[...c,picto]);
-        dbPut(picto)
-          .then(()=>console.log("[RelojVisual] pictograma guardado:", picto.n))
-          .catch(err=>console.error("[RelojVisual] error guardando pictograma:", err));
+        dbPut(picto).catch(()=>{});
       };
       reader.readAsDataURL(file);
     });
@@ -233,7 +261,11 @@ export default function RelojVisual(){
   const addStep=()=>{
     const opt=allOptions.find(o=>o.key===draft.key)||allOptions[0];
     const p=opt.picto;
-    setRoutine(r=>[...r,{id:Date.now(),e:p.e,img:p.img,n:p.n,mins:Math.min(60,Math.max(1,draft.mins))}]);
+    const isCustom=draft.key.startsWith("c");
+    const step={id:Date.now(),e:p.e,img:p.img,n:p.n,mins:Math.min(60,Math.max(1,draft.mins))};
+    if(isCustom) step.customId=p.id;
+    routineLoaded.current=true;
+    setRoutine(r=>[...r,step]);
   };
   const removeStep=(id)=>setRoutine(r=>r.filter(s=>s.id!==id));
   const startRoutine=()=>{if(!routine.length)return;setModal(null);loadStep(0,false);};
