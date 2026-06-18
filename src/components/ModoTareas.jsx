@@ -160,9 +160,6 @@ export default function ModoTareas({
               onKeyDown={e=>e.key==="Enter"&&setMinutes(Number(minInput)||1)}/>
             <span style={{color:T.dim,fontWeight:800,fontSize:13}}>min</span>
             <button className="btn" onClick={reset}>↺</button>
-            {!running
-              ?<button className="btn primary" onClick={start}>▶ Comenzar</button>
-              :<button className="btn primary" onClick={pause}>⏸ Pausa</button>}
           </div>
         </div>
 
@@ -248,18 +245,25 @@ export default function ModoTareas({
         </div>
       )}
 
-      {/* ---- Tab-bar móvil ---- */}
+      {/* ---- Tab-bar móvil (mismas 5 posiciones que ModoReloj) ---- */}
       <div className="rv-tabbar">
-        <button className="tab" onClick={reset}>
-          <span className="ico">↺</span>Reiniciar
+        {/* pos 1: + Tarea (reemplaza Actividad) */}
+        <button className="tab" onClick={()=>inputRef.current?.focus()}>
+          <span className="ico">＋</span>Tarea
         </button>
+        {/* pos 2: spacer (reemplaza Rutina) */}
+        <div style={{flex:1}}/>
+        {/* pos 3: acción central — misma posición que Reloj */}
         <button className="tab main" onClick={running?pause:start}>
           <span className="ico">{running?"⏸":"▶"}</span>
           {running?"Pausar":"Comenzar"}
         </button>
-        <button className="tab" onClick={agregar} disabled={!input.trim()}>
-          <span className="ico">＋</span>Tarea
+        {/* pos 4: Reiniciar */}
+        <button className="tab" onClick={reset}>
+          <span className="ico">↺</span>Reiniciar
         </button>
+        {/* pos 5: spacer (reemplaza Ajustes) */}
+        <div style={{flex:1}}/>
       </div>
     </>
   );
