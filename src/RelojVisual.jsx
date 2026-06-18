@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { dbGetAll, dbPut, dbDelete } from "./db";
 
 /* ============================================================
    RELOJ VISUAL v3 — totalmente responsivo móvil/desktop
@@ -86,6 +87,13 @@ export default function RelojVisual(){
 
   const[activity,setActivity]=useState(PICTOS[3]);
   const[customPictos,setCustomPictos]=useState([]);
+
+  // Cargar pictogramas guardados al iniciar
+  useEffect(()=>{
+    dbGetAll().then(items=>{
+      if(items.length) setCustomPictos(items);
+    }).catch(()=>{});
+  },[]);
   const[routine,setRoutine]=useState([]);
   const[stepIdx,setStepIdx]=useState(-1);
 
@@ -192,14 +200,26 @@ export default function RelojVisual(){
       const reader=new FileReader();
       reader.onload=()=>{
         const name=file.name.replace(/\.[^.]+$/,"").slice(0,24)||"Imagen";
-        setCustomPictos(c=>[...c,{id:Date.now()+Math.random(),img:reader.result,n:name}]);
+        const picto={id:Date.now()+Math.random(),img:reader.result,n:name};
+        setCustomPictos(c=>[...c,picto]);
+        dbPut(picto).catch(()=>{});
       };
       reader.readAsDataURL(file);
     });
     ev.target.value="";
   };
-  const removeCustom=(id)=>setCustomPictos(c=>c.filter(p=>p.id!==id));
-  const renameCustom=(id,n)=>setCustomPictos(c=>c.map(p=>p.id===id?{...p,n}:p));
+  const removeCustom=(id)=>{
+    setCustomPictos(c=>c.filter(p=>p.id!==id));
+    dbDelete(id).catch(()=>{});
+  };
+  const renameCustom=(id,n)=>{
+    setCustomPictos(c=>{
+      const updated=c.map(p=>p.id===id?{...p,n}:p);
+      const picto=updated.find(p=>p.id===id);
+      if(picto) dbPut(picto).catch(()=>{});
+      return updated;
+    });
+  };
 
   /* ---- rutina ---- */
   const[draft,setDraft]=useState({key:"p3",mins:10});
@@ -627,7 +647,7 @@ export default function RelojVisual(){
                 </button>
               ))}
             </div>
-            <p className="rv-note">Las imágenes subidas se mantienen durante la sesión. Toca el nombre para editarlo.</p>
+            <p className="rv-note">Las imágenes se guardan en este dispositivo (solo aquí). Si borras el caché del navegador o cambias de equipo, las perderás. Toca el nombre para editarlo.</p>
             <button className="btn" style={{width:"100%",marginTop:12}} onClick={()=>setModal(null)}>Cerrar</button>
           </div>
         </div>
