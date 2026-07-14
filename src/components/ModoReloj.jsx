@@ -7,7 +7,7 @@ import ModalAjustes from "./ModalAjustes";
 
 export default function ModoReloj({
   // estado compartido
-  customPictos, onUploadClick, onRenameCustom, onRemoveCustom,
+  customPictos, onUploadClick, onRenameCustom, onRemoveCustom, onAddCustomPicto,
   savedRoutines, setSavedRoutines,
   // ajustes
   wedgeKey, setWedgeKey,
@@ -260,6 +260,7 @@ export default function ModoReloj({
           onUploadClick={onUploadClick}
           onRename={onRenameCustom}
           onRemove={onRemoveCustom}
+          onAddCustomPicto={onAddCustomPicto}
         />
       )}
 

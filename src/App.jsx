@@ -47,6 +47,11 @@ export default function App() {
     ev.target.value="";
   };
 
+  const addCustomPicto = (picto) => {
+    setCustomPictos(c => [...c, picto]);
+    dbPut(picto).catch(() => {});
+  };
+
   const removeCustom = (id) => {
     setCustomPictos(c=>c.filter(p=>p.id!==id));
     dbDelete(id).catch(()=>{});
@@ -269,6 +274,7 @@ export default function App() {
     onUploadClick: ()=>fileRef.current?.click(),
     onRenameCustom: renameCustom,
     onRemoveCustom: removeCustom,
+    onAddCustomPicto: addCustomPicto,
     savedRoutines, setSavedRoutines,
     wedgeKey, setWedgeKey,
     inverted, setInverted,
