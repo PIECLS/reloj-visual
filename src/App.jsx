@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { dbGetAll, dbPut, dbDelete } from "./db";
 import { T, WEDGE_COLORS, textOn } from "./shared";
+import useWakeLock from "./hooks/useWakeLock";
 import ModoReloj from "./components/ModoReloj";
 import ModoSemaforo from "./components/ModoSemaforo";
 import ModoTareas from "./components/ModoTareas";
@@ -15,6 +16,15 @@ export default function App() {
   const [modo, setModo] = useState("reloj");
 
   // ---- Ajustes compartidos ----
+  const [wakeLockOn, setWakeLockOn] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("rv-wakelock") ?? "true"); }
+    catch(e) { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("rv-wakelock", JSON.stringify(wakeLockOn)); } catch(e) {}
+  }, [wakeLockOn]);
+  const { active: wakeLockActive } = useWakeLock(wakeLockOn);
+
   const [wedgeKey, setWedgeKey] = useState("rojo");
   const [inverted, setInverted] = useState(false);
   const [sound, setSound] = useState("suave");
@@ -282,6 +292,7 @@ export default function App() {
     reducedMotion, setReducedMotion,
     speechOn, setSpeechOn,
     activeHitos, toggleHito,
+    wakeLockOn, setWakeLockOn,
   };
 
   return (
@@ -292,7 +303,14 @@ export default function App() {
 
       {/* ---- header ---- */}
       <div className="rv-hdr">
-        <div className="rv-title">Reloj Visual PIE</div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div className="rv-title">Reloj Visual PIE</div>
+          {wakeLockActive && (
+            <span title="Pantalla bloqueada activa" style={{
+              fontSize:13, opacity:.55, lineHeight:1, userSelect:"none",
+            }}>🔆</span>
+          )}
+        </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div className="rv-modeselector">
             {MODOS.map(m=>(

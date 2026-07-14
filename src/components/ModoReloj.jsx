@@ -16,6 +16,7 @@ export default function ModoReloj({
   reducedMotion, setReducedMotion,
   speechOn, setSpeechOn,
   activeHitos, toggleHito,
+  wakeLockOn, setWakeLockOn,
 }) {
   const dir = inverted ? -1 : 1;
   const baseWedge = WEDGE_COLORS.find(w=>w.k===wedgeKey).c;
@@ -282,6 +283,7 @@ export default function ModoReloj({
           reducedMotion={reducedMotion} setReducedMotion={setReducedMotion}
           speechOn={speechOn} setSpeechOn={setSpeechOn}
           activeHitos={activeHitos} toggleHito={toggleHito}
+          wakeLockOn={wakeLockOn} setWakeLockOn={setWakeLockOn}
           onClose={()=>setModal(null)}
         />
       )}

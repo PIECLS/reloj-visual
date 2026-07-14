@@ -7,6 +7,7 @@ export default function ModalAjustes({
   reducedMotion, setReducedMotion,
   speechOn, setSpeechOn,
   activeHitos, toggleHito,
+  wakeLockOn, setWakeLockOn,
   onClose,
 }) {
   return (
@@ -77,6 +78,14 @@ export default function ModalAjustes({
               </div>
               <span style={{fontSize:12,color:T.dim}}>Requiere sonido activado</span>
             </div>
+          </div>
+        </div>
+
+        <div className="rv-row">
+          <span className="rv-label">Pantalla</span>
+          <div className="rv-seg">
+            <button className={wakeLockOn?"on":""} onClick={()=>setWakeLockOn(true)}>Encendida</button>
+            <button className={!wakeLockOn?"on":""} onClick={()=>setWakeLockOn(false)}>Normal</button>
           </div>
         </div>
 
