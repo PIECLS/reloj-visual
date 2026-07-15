@@ -255,7 +255,7 @@ export default function ModoTareas({
               background:wedgeColor, color:textOn(wedgeColor),
               fontWeight:800, fontSize:12, padding:"5px 14px",
               borderRadius:999, marginBottom:8, whiteSpace:"nowrap",
-              animation: reducedMotion ? "none" : "rvpulse 1.6s ease-in-out infinite",
+              animation: "rvpulse 1.6s ease-in-out infinite",
             }}>
               ⏳ {warnState === "w1" ? "¡Ya casi!" : "Queda poco"}
             </div>
@@ -270,7 +270,7 @@ export default function ModoTareas({
               <circle cx={CX} cy={CY} r={R} fill={T.panel} stroke={T.line} strokeWidth="2"/>
               {ticks}{numbers}
               <path d={wedgePath(wedgeAngle, dir)} fill={wedgeColor} opacity={.92}
-                style={{transition: reducedMotion ? "none" : "fill .5s"}}/>
+                style={{transition: "fill .5s"}}/>
               <line x1={CX} y1={CY} x2={handlePos.x} y2={handlePos.y}
                 stroke={T.text} strokeWidth="3" strokeLinecap="round" opacity=".85"/>
               <circle cx={handlePos.x} cy={handlePos.y} r="24" fill="transparent"
