@@ -28,12 +28,12 @@ export const WEDGE_COLORS = [
 ];
 
 export const MILESTONES = [
-  { key:"m5",  secs:300, minTotal:330, text:"Quedan cinco minutos" },
-  { key:"m3",  secs:180, minTotal:210, text:"Quedan tres minutos" },
-  { key:"m2",  secs:120, minTotal:150, text:"Quedan dos minutos" },
-  { key:"m1",  secs:60,  minTotal:90,  text:"Queda un minuto" },
-  { key:"s30", secs:30,  minTotal:60,  text:"Quedan treinta segundos" },
-  { key:"s5",  secs:5,   minTotal:30,  text:"Quedan cinco segundos" },
+  { key:"m5",  secs:300, minTotal:330, text:"Quedan cinco minutos",    label:"5 min" },
+  { key:"m3",  secs:180, minTotal:210, text:"Quedan tres minutos",     label:"3 min" },
+  { key:"m2",  secs:120, minTotal:150, text:"Quedan dos minutos",      label:"2 min" },
+  { key:"m1",  secs:60,  minTotal:90,  text:"Queda un minuto",         label:"1 min" },
+  { key:"s30", secs:30,  minTotal:60,  text:"Quedan treinta segundos", label:"30 seg" },
+  { key:"s5",  secs:5,   minTotal:30,  text:"Quedan cinco segundos",   label:"5 seg" },
 ];
 
 export function textOn(hex) {

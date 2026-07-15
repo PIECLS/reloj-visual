@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, fmt } from "../shared";
 import useTimer from "../hooks/useTimer";
+import AjustesComunes from "./AjustesComunes";
 
 function cargarLS(key, def) {
   try { return JSON.parse(localStorage.getItem(key) || "null") ?? def; }
@@ -13,15 +14,22 @@ function guardarLS(key, val) {
 const DEFAULTS_AJUSTES = { alTerminar: "avanzar", visTiempo: "tarea" };
 
 export default function ModoTareas({
-  wedgeKey, inverted, sound, reducedMotion, activeHitos, speechOn,
+  // props compartidos de App (wedgeKey etc. son los del Reloj — Tareas usa sus propias)
+  wakeLockOn, setWakeLockOn,
+  // props independientes de Tareas
+  tWedgeKey, setTWedgeKey,
+  tInverted, setTInverted,
+  tSound, setTSound,
+  tSpeechOn, setTSpeechOn,
+  tActiveHitos, toggleTHito,
 }) {
-  const dir       = inverted ? -1 : 1;
-  const baseWedge = WEDGE_COLORS.find(w => w.k === wedgeKey).c;
+  const dir       = tInverted ? -1 : 1;
+  const baseWedge = WEDGE_COLORS.find(w => w.k === tWedgeKey).c;
 
   const {
     totalSecs, remaining, running, done, setDone,
     minInput, setMinInput, setMinutes, loadMinutes, start, pause, reset,
-  } = useTimer({ sound, activeHitos, speechOn });
+  } = useTimer({ sound: tSound, activeHitos: tActiveHitos, speechOn: tSpeechOn });
 
   const [viewMode, setViewMode] = useState("restante");
   const svgRef  = useRef(null);
@@ -73,6 +81,18 @@ export default function ModoTareas({
     setTareaActiva(-1);
   };
 
+  const handleReset = () => {
+    setTareas(ts => ts.map(t => ({ ...t, hecha: false })));
+    if (tareas.length > 0) {
+      setTareaActiva(0);
+      if (tareas[0]?.mins) loadMinutes(tareas[0].mins, false);
+      else reset();
+    } else {
+      setTareaActiva(-1);
+      reset();
+    }
+  };
+
   const activarTarea = (idx) => {
     setTareaActiva(idx);
     const mins = tareas[idx]?.mins;
@@ -92,17 +112,6 @@ export default function ModoTareas({
   };
   const guardarAjustes = () => {
     setAjustesTareas(editAjustes);
-    // Recalcular el timer inmediatamente si cambia visTiempo y hay tareas con tiempo
-    const tareasConTiempo = tareas.filter(t => t.mins);
-    if (tareasConTiempo.length > 0 && !running) {
-      if (editAjustes.visTiempo === "acumulado") {
-        const total = Math.min(60, tareas.reduce((s, t) => s + (t.mins || 0), 0));
-        loadMinutes(total, false);
-      } else {
-        const activa = tareaActiva >= 0 ? tareas[tareaActiva] : tareasConTiempo[0];
-        if (activa?.mins) loadMinutes(activa.mins, false);
-      }
-    }
     setModalAjustes(false);
   };
 
@@ -149,11 +158,8 @@ export default function ModoTareas({
     }));
     setTareas(nuevasTareas);
     setTareaActiva(0);
-    // Carga el tiempo según la preferencia de visTiempo
-    const minsCarga = ajustesTareas.visTiempo === "acumulado"
-      ? rutina.pasos.reduce((s, p) => s + p.mins, 0)
-      : rutina.pasos[0]?.mins ?? 1;
-    loadMinutes(Math.min(60, minsCarga), false);
+    // Siempre carga el tiempo de la primera tarea — visTiempo solo afecta la pantalla
+    loadMinutes(Math.min(60, rutina.pasos[0]?.mins ?? 1), false);
     setModalRutina(false);
   };
 
@@ -170,15 +176,15 @@ export default function ModoTareas({
   };
 
   // ---- reloj visual ----
-  const warn5On  = activeHitos.m5;
-  const warn1On  = activeHitos.m1;
+  const warn5On  = tActiveHitos.m5;
+  const warn1On  = tActiveHitos.m1;
   const warnState =
     (running || remaining < totalSecs)
       ? remaining <= 60  && warn1On && totalSecs > 90  ? "w1"
       : remaining <= 300 && warn5On && totalSecs > 330 ? "w5" : "ok"
     : "ok";
   const wedgeColor = warnState === "w1" ? T.warn1 : warnState === "w5" ? T.warn5 : baseWedge;
-  const shownSecs  = viewMode === "restante" ? remaining : totalSecs - remaining;
+  const shownSecs  = (viewMode === "restante" ? remaining : totalSecs - remaining) + futureSecs;
   const wedgeAngle = (viewMode === "restante" ? remaining : totalSecs - remaining) / 10;
   const handlePos  = polar(wedgeAngle, dir);
 
@@ -224,6 +230,11 @@ export default function ModoTareas({
 
   const hechas = tareas.filter(t => t.hecha).length;
   const total  = tareas.length;
+
+  // shownSecs: en modo acumulado+restante suma el tiempo de tareas futuras
+  const futureSecs = ajustesTareas.visTiempo === "acumulado" && tareaActiva >= 0 && viewMode === "restante"
+    ? tareas.slice(tareaActiva + 1).reduce((s, t) => s + (t.mins || 0) * 60, 0)
+    : 0;
 
   return (
     <>
@@ -298,7 +309,7 @@ export default function ModoTareas({
               onBlur={() => setMinutes(Number(minInput) || 1)}
               onKeyDown={e => e.key === "Enter" && setMinutes(Number(minInput) || 1)}/>
             <span style={{color:T.dim,fontWeight:800,fontSize:13}}>min</span>
-            <button className="btn" onClick={reset}>↺</button>
+            <button className="btn" onClick={handleReset}>↺</button>
           </div>
         </div>
 
@@ -548,55 +559,67 @@ export default function ModoTareas({
       {/* ===== Modal ajustes del modo Tareas ===== */}
       {modalAjustes && (
         <div className="rv-overlay" onClick={() => setModalAjustes(false)}>
-          <div className="rv-card" onClick={e => e.stopPropagation()}>
+          <div className="rv-card" onClick={e => e.stopPropagation()}
+            style={{maxHeight:"88vh", overflowY:"auto"}}>
             <div className="rv-drag-pill"/>
             <h2>Ajustes del modo Tareas</h2>
 
-            {/* (a) Al acabarse el tiempo */}
-            <p style={{color:T.dim,fontSize:13,fontWeight:700,margin:"0 0 10px"}}>
-              Al acabarse el tiempo de una tarea
-            </p>
-            {[
-              { val:"avanzar", label:"Solo avanzar",
-                desc:"Resalta la siguiente tarea; el estudiante la marca cuando termina." },
-              { val:"tachar",  label:"Tachar automáticamente",
-                desc:"Marca la tarea como completada y avanza a la siguiente." },
-            ].map(op => (
-              <button key={op.val} onClick={() => setEditAjustes(prev => ({ ...prev, alTerminar: op.val }))}
-                style={{
-                  width:"100%", textAlign:"left", padding:"12px 14px",
-                  marginBottom:8, borderRadius:14, cursor:"pointer",
-                  border:`1.5px solid ${editAjustes.alTerminar === op.val ? "#4A90D9" : T.line}`,
-                  background: editAjustes.alTerminar === op.val ? "#4A90D922" : T.panel,
-                  color:T.text, fontSize:13,
-                }}>
-                <div style={{fontWeight:800,marginBottom:3}}>{op.label}</div>
-                <div style={{color:T.dim,fontSize:12}}>{op.desc}</div>
-              </button>
-            ))}
+            {/* Secciones comunes: color, orientación, sonido, avisos, pantalla */}
+            <AjustesComunes
+              wedgeKey={tWedgeKey} setWedgeKey={setTWedgeKey}
+              inverted={tInverted} setInverted={setTInverted}
+              sound={tSound} setSound={setTSound}
+              speechOn={tSpeechOn} setSpeechOn={setTSpeechOn}
+              activeHitos={tActiveHitos} toggleHito={toggleTHito}
+              wakeLockOn={wakeLockOn} setWakeLockOn={setWakeLockOn}
+            />
 
-            {/* (b) Visualización del tiempo */}
-            <p style={{color:T.dim,fontSize:13,fontWeight:700,margin:"16px 0 10px"}}>
-              Visualización del reloj
-            </p>
-            {[
-              { val:"tarea",     label:"Tiempo de la tarea actual",
-                desc:"El reloj muestra solo el tiempo de la tarea en curso." },
-              { val:"acumulado", label:"Tiempo acumulado",
-                desc:"Al cargar una rutina, el reloj muestra el tiempo total de todas las tareas." },
-            ].map(op => (
-              <button key={op.val} onClick={() => setEditAjustes(prev => ({ ...prev, visTiempo: op.val }))}
-                style={{
-                  width:"100%", textAlign:"left", padding:"12px 14px",
-                  marginBottom:8, borderRadius:14, cursor:"pointer",
-                  border:`1.5px solid ${editAjustes.visTiempo === op.val ? "#4A90D9" : T.line}`,
-                  background: editAjustes.visTiempo === op.val ? "#4A90D922" : T.panel,
-                  color:T.text, fontSize:13,
-                }}>
-                <div style={{fontWeight:800,marginBottom:3}}>{op.label}</div>
-                <div style={{color:T.dim,fontSize:12}}>{op.desc}</div>
-              </button>
-            ))}
+            {/* Sección específica de Tareas */}
+            <div style={{borderTop:`1.5px solid ${T.line}`,marginTop:16,paddingTop:16}}>
+              <p style={{color:T.dim,fontSize:13,fontWeight:700,margin:"0 0 10px"}}>
+                Al acabarse el tiempo de una tarea
+              </p>
+              {[
+                { val:"avanzar", label:"Solo avanzar",
+                  desc:"Resalta la siguiente tarea; el estudiante la marca cuando termina." },
+                { val:"tachar",  label:"Tachar automáticamente",
+                  desc:"Marca la tarea como completada y avanza a la siguiente." },
+              ].map(op => (
+                <button key={op.val} onClick={() => setEditAjustes(prev => ({ ...prev, alTerminar: op.val }))}
+                  style={{
+                    width:"100%", textAlign:"left", padding:"12px 14px",
+                    marginBottom:8, borderRadius:14, cursor:"pointer",
+                    border:`1.5px solid ${editAjustes.alTerminar === op.val ? "#4A90D9" : T.line}`,
+                    background: editAjustes.alTerminar === op.val ? "#4A90D922" : T.panel,
+                    color:T.text, fontSize:13,
+                  }}>
+                  <div style={{fontWeight:800,marginBottom:3}}>{op.label}</div>
+                  <div style={{color:T.dim,fontSize:12}}>{op.desc}</div>
+                </button>
+              ))}
+
+              <p style={{color:T.dim,fontSize:13,fontWeight:700,margin:"16px 0 10px"}}>
+                Visualización del reloj
+              </p>
+              {[
+                { val:"tarea",     label:"Tiempo de la tarea actual",
+                  desc:"El reloj muestra solo el tiempo de la tarea en curso." },
+                { val:"acumulado", label:"Tiempo acumulado",
+                  desc:"El número muestra el tiempo restante de todas las tareas combinadas." },
+              ].map(op => (
+                <button key={op.val} onClick={() => setEditAjustes(prev => ({ ...prev, visTiempo: op.val }))}
+                  style={{
+                    width:"100%", textAlign:"left", padding:"12px 14px",
+                    marginBottom:8, borderRadius:14, cursor:"pointer",
+                    border:`1.5px solid ${editAjustes.visTiempo === op.val ? "#4A90D9" : T.line}`,
+                    background: editAjustes.visTiempo === op.val ? "#4A90D922" : T.panel,
+                    color:T.text, fontSize:13,
+                  }}>
+                  <div style={{fontWeight:800,marginBottom:3}}>{op.label}</div>
+                  <div style={{color:T.dim,fontSize:12}}>{op.desc}</div>
+                </button>
+              ))}
+            </div>
 
             <button className="btn primary" style={{width:"100%",marginTop:14}}
               onClick={guardarAjustes}>Listo</button>
@@ -616,7 +639,7 @@ export default function ModoTareas({
           <span className="ico">{running ? "⏸" : "▶"}</span>
           {running ? "Pausar" : "Comenzar"}
         </button>
-        <button className="tab" onClick={reset}>
+        <button className="tab" onClick={handleReset}>
           <span className="ico">↺</span>Reiniciar
         </button>
         <button className="tab" onClick={abrirAjustes}>

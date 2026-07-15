@@ -25,6 +25,7 @@ export default function App() {
   }, [wakeLockOn]);
   const { active: wakeLockActive } = useWakeLock(wakeLockOn);
 
+  // ---- Ajustes Reloj ----
   const [wedgeKey, setWedgeKey] = useState("rojo");
   const [inverted, setInverted] = useState(false);
   const [sound, setSound] = useState("suave");
@@ -32,6 +33,19 @@ export default function App() {
   const [speechOn, setSpeechOn] = useState(false);
   const [activeHitos, setActiveHitos] = useState({ m5:true, m3:false, m2:false, m1:true, s30:false, s5:false });
   const toggleHito = (k) => setActiveHitos(h=>({...h,[k]:!h[k]}));
+
+  // ---- Ajustes Tareas (independientes) ----
+  const [tWedgeKey, setTWedgeKey] = useState(()=>{ try{return localStorage.getItem("rv-t-wedge")||"azul"}catch{return"azul"} });
+  const [tInverted, setTInverted] = useState(()=>{ try{return JSON.parse(localStorage.getItem("rv-t-inverted")||"false")}catch{return false} });
+  const [tSound, setTSound] = useState(()=>{ try{return localStorage.getItem("rv-t-sound")||"suave"}catch{return"suave"} });
+  const [tSpeechOn, setTSpeechOn] = useState(()=>{ try{return JSON.parse(localStorage.getItem("rv-t-speech")||"false")}catch{return false} });
+  const [tActiveHitos, setTActiveHitos] = useState(()=>{ try{return JSON.parse(localStorage.getItem("rv-t-hitos")||"null")||{m5:true,m3:false,m2:false,m1:true,s30:false,s5:false}}catch{return{m5:true,m3:false,m2:false,m1:true,s30:false,s5:false}} });
+  const toggleTHito = (k) => setTActiveHitos(h=>({...h,[k]:!h[k]}));
+  useEffect(()=>{ try{localStorage.setItem("rv-t-wedge",tWedgeKey)}catch{} },[tWedgeKey]);
+  useEffect(()=>{ try{localStorage.setItem("rv-t-inverted",JSON.stringify(tInverted))}catch{} },[tInverted]);
+  useEffect(()=>{ try{localStorage.setItem("rv-t-sound",tSound)}catch{} },[tSound]);
+  useEffect(()=>{ try{localStorage.setItem("rv-t-speech",JSON.stringify(tSpeechOn))}catch{} },[tSpeechOn]);
+  useEffect(()=>{ try{localStorage.setItem("rv-t-hitos",JSON.stringify(tActiveHitos))}catch{} },[tActiveHitos]);
 
   const baseWedge = WEDGE_COLORS.find(w=>w.k===wedgeKey).c;
 
@@ -328,7 +342,13 @@ export default function App() {
       {/* ---- modo activo ---- */}
       {modo==="reloj"    && <ModoReloj    {...sharedProps}/>}
       {modo==="semaforo" && <ModoSemaforo {...sharedProps}/>}
-      {modo==="tareas"   && <ModoTareas   {...sharedProps}/>}
+      {modo==="tareas"   && <ModoTareas   {...sharedProps}
+        tWedgeKey={tWedgeKey} setTWedgeKey={setTWedgeKey}
+        tInverted={tInverted} setTInverted={setTInverted}
+        tSound={tSound} setTSound={setTSound}
+        tSpeechOn={tSpeechOn} setTSpeechOn={setTSpeechOn}
+        tActiveHitos={tActiveHitos} toggleTHito={toggleTHito}
+      />}
     </div>
   );
 }
