@@ -176,6 +176,11 @@ export default function ModoTareas({
   };
 
   // ---- reloj visual ----
+  // futureSecs: en modo acumulado+restante suma el tiempo de tareas futuras
+  const futureSecs = ajustesTareas.visTiempo === "acumulado" && tareaActiva >= 0 && viewMode === "restante"
+    ? tareas.slice(tareaActiva + 1).reduce((s, t) => s + (t.mins || 0) * 60, 0)
+    : 0;
+
   const warn5On  = tActiveHitos.m5;
   const warn1On  = tActiveHitos.m1;
   const warnState =
@@ -230,11 +235,6 @@ export default function ModoTareas({
 
   const hechas = tareas.filter(t => t.hecha).length;
   const total  = tareas.length;
-
-  // shownSecs: en modo acumulado+restante suma el tiempo de tareas futuras
-  const futureSecs = ajustesTareas.visTiempo === "acumulado" && tareaActiva >= 0 && viewMode === "restante"
-    ? tareas.slice(tareaActiva + 1).reduce((s, t) => s + (t.mins || 0) * 60, 0)
-    : 0;
 
   return (
     <>
