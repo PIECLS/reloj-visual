@@ -53,7 +53,7 @@ export default function ModoTareas({
     if (siguiente < tareas.length) {
       setTareaActiva(siguiente);
       const nextMins = tareas[siguiente]?.mins;
-      if (nextMins) loadMinutes(nextMins, false);
+      if (nextMins) loadMinutes(nextMins, true);
       setDone(false);
     }
     // Si no hay siguiente, deja el modal de "¡Tiempo terminado!" visible
@@ -150,6 +150,7 @@ export default function ModoTareas({
   };
 
   const cargarRutina = (rutina) => {
+    pause();
     const nuevasTareas = rutina.pasos.map(p => ({
       id: Date.now() + Math.random(),
       texto: p.texto,
@@ -176,8 +177,8 @@ export default function ModoTareas({
   };
 
   // ---- reloj visual ----
-  // futureSecs: en modo acumulado+restante suma el tiempo de tareas futuras
-  const futureSecs = ajustesTareas.visTiempo === "acumulado" && tareaActiva >= 0 && viewMode === "restante"
+  // futureSecs: suma los minutos de tareas futuras cuando visTiempo="acumulado"
+  const futureSecs = ajustesTareas.visTiempo === "acumulado" && tareaActiva >= 0
     ? tareas.slice(tareaActiva + 1).reduce((s, t) => s + (t.mins || 0) * 60, 0)
     : 0;
 
@@ -189,8 +190,10 @@ export default function ModoTareas({
       : remaining <= 300 && warn5On && totalSecs > 330 ? "w5" : "ok"
     : "ok";
   const wedgeColor = warnState === "w1" ? T.warn1 : warnState === "w5" ? T.warn5 : baseWedge;
-  const shownSecs  = (viewMode === "restante" ? remaining : totalSecs - remaining) + futureSecs;
-  const wedgeAngle = (viewMode === "restante" ? remaining : totalSecs - remaining) / 10;
+  // shownSecs: en modo "Queda" muestra tiempo acumulado si corresponde; en "Llevo" solo la tarea actual
+  const shownSecs  = viewMode === "restante" ? remaining + futureSecs : totalSecs - remaining;
+  // wedgeAngle: el arco siempre refleja el tiempo restante (incluyendo acumulado si aplica)
+  const wedgeAngle = Math.min(360, (remaining + futureSecs) / 10);
   const handlePos  = polar(wedgeAngle, dir);
 
   const ticks = [], numbers = [];
