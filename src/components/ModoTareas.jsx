@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, fmt } from "../shared";
 import useTimer from "../hooks/useTimer";
 import AjustesComunes from "./AjustesComunes";
+import PanelRadial from "./PanelRadial";
 
 function cargarLS(key, def) {
   try { return JSON.parse(localStorage.getItem(key) || "null") ?? def; }
@@ -14,8 +15,9 @@ function guardarLS(key, val) {
 const DEFAULTS_AJUSTES = { alTerminar: "avanzar", visTiempo: "tarea" };
 
 export default function ModoTareas({
-  // props compartidos de App (wedgeKey etc. son los del Reloj — Tareas usa sus propias)
+  // props compartidos de App
   wakeLockOn, setWakeLockOn,
+  reducedMotion,
   // props independientes de Tareas
   tWedgeKey, setTWedgeKey,
   tInverted, setTInverted,
@@ -239,14 +241,32 @@ export default function ModoTareas({
   const hechas = tareas.filter(t => t.hecha).length;
   const total  = tareas.length;
 
+  const panelButtons = [
+    { ico:"＋", label:"Tarea",    onClick:()=>inputRef.current?.focus() },
+    { ico:"📋", label:"Rutinas",  onClick:()=>{ setVistaRutina("lista"); setModalRutina(true); } },
+    { ico:running?"⏸":"▶", label:running?"Pausar":"Comenzar", onClick:running?pause:start, isMain:true },
+    { ico:"↺",  label:"Reiniciar", onClick:handleReset },
+    { ico:"⚙️", label:"Ajustes",   onClick:abrirAjustes },
+  ];
+
   return (
     <>
+      <style>{`
+        .rv-tareas-layout {
+          display: flex; flex-direction: row; width: 100%;
+          max-width: min(940px, calc(100vw - 160px));
+          gap: 24px; padding: 0 16px 80px; flex: 1; flex-wrap: wrap;
+        }
+        @media (max-width: 640px) {
+          .rv-tareas-layout { max-width: 100%; justify-content: center; }
+        }
+      `}</style>
+
+      {/* ---- panel radial desktop ---- */}
+      <PanelRadial buttons={panelButtons} accent={baseWedge} reducedMotion={reducedMotion}/>
+
       {/* ===== Layout principal ===== */}
-      <div style={{
-        display:"flex", flexDirection:"row", width:"100%",
-        maxWidth:940, gap:24, padding:"0 16px 80px", flex:1,
-        flexWrap:"wrap",
-      }}>
+      <div className="rv-tareas-layout">
 
         {/* ---- Columna izquierda: reloj ---- */}
         <div style={{
@@ -258,7 +278,7 @@ export default function ModoTareas({
               background:wedgeColor, color:textOn(wedgeColor),
               fontWeight:800, fontSize:12, padding:"5px 14px",
               borderRadius:999, marginBottom:8, whiteSpace:"nowrap",
-              animation: "rvpulse 1.6s ease-in-out infinite",
+              animation: reducedMotion ? "none" : "rvpulse 1.6s ease-in-out infinite",
             }}>
               ⏳ {warnState === "w1" ? "¡Ya casi!" : "Queda poco"}
             </div>
@@ -273,7 +293,7 @@ export default function ModoTareas({
               <circle cx={CX} cy={CY} r={R} fill={T.panel} stroke={T.line} strokeWidth="2"/>
               {ticks}{numbers}
               <path d={wedgePath(wedgeAngle, dir)} fill={wedgeColor} opacity={.92}
-                style={{transition: "fill .5s"}}/>
+                style={{transition: reducedMotion ? "none" : "fill .5s"}}/>
               <line x1={CX} y1={CY} x2={handlePos.x} y2={handlePos.y}
                 stroke={T.text} strokeWidth="3" strokeLinecap="round" opacity=".85"/>
               <circle cx={handlePos.x} cy={handlePos.y} r="24" fill="transparent"
@@ -529,10 +549,14 @@ export default function ModoTareas({
                         placeholder="Nombre de la tarea"
                         value={p.texto}
                         onChange={e => actualizarPaso(i, "texto", e.target.value)}/>
-                      <input className="rv-input" type="number" min="1" max="120"
+                      <input className="rv-input" type="text" inputMode="numeric"
                         style={{width:52,textAlign:"center",padding:"8px 4px"}}
                         value={p.mins}
-                        onChange={e => actualizarPaso(i, "mins", e.target.value)}/>
+                        onChange={e => actualizarPaso(i, "mins", e.target.value.replace(/[^0-9]/g,""))}
+                        onBlur={e => {
+                          const v = Math.min(120, Math.max(1, parseInt(e.target.value,10)||1));
+                          actualizarPaso(i, "mins", v);
+                        }}/>
                       <span style={{color:T.dim,fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>min</span>
                       <button onClick={() => setEditRutina(prev => ({
                           ...prev, pasos: prev.pasos.filter((_, j) => j !== i),
