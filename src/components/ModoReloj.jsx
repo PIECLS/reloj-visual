@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createRoot } from "react-dom/client";
 import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, fmt, darkenColor } from "../shared";
 import useTimer from "../hooks/useTimer";
 import ModalPicker from "./ModalPicker";
@@ -6,6 +7,51 @@ import ModalRutina from "./ModalRutina";
 import ModalAjustes from "./ModalAjustes";
 import ModalBiblioteca from "./ModalBiblioteca";
 import PanelRadial from "./PanelRadial";
+
+// ── Componente renderizado dentro de la ventana PiP ──────────────────────────
+function MiniClock({ lap1Angle, lap2Angle, lap2Secs, wedgeColor, darkColor, dir, activity, shownSecs }) {
+  const ticks = [];
+  for(let i=0;i<60;i++){
+    const major=i%5===0,a=i*6;
+    const p1=polar(a,dir,R+4),p2=polar(a,dir,R+(major?16:10));
+    ticks.push(<line key={i} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+      stroke={T.dim} strokeWidth={major?2.4:1} opacity={major?.9:.45}/>);
+  }
+  return (
+    <div style={{
+      width:"100%",height:"100vh",display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",background:T.bg,
+      fontFamily:"ui-rounded,'Segoe UI',system-ui,sans-serif",padding:8,
+    }}>
+      <div style={{position:"relative",width:"100%",flex:1,minHeight:0}}>
+        <svg viewBox="0 0 400 400" style={{width:"100%",height:"100%",display:"block"}}>
+          <circle cx={CX} cy={CY} r={R} fill={T.panel} stroke={T.line} strokeWidth="2"/>
+          {ticks}
+          <path d={wedgePath(lap1Angle,dir)} fill={wedgeColor} opacity={.92}/>
+          {lap2Secs>0&&<path d={wedgePath(lap2Angle,dir)} fill={darkColor} opacity={.92}/>}
+          <circle cx={CX} cy={CY} r="6" fill={T.text}/>
+        </svg>
+        <div style={{
+          position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",
+          width:"38%",height:"38%",borderRadius:"50%",
+          background:T.bg,border:`2px solid ${T.line}`,
+          display:"flex",flexDirection:"column",alignItems:"center",
+          justifyContent:"center",gap:2,
+          boxShadow:`0 0 0 6px ${T.bg}`,userSelect:"none",overflow:"hidden",
+        }}>
+          {activity.img
+            ?<img src={activity.img} alt={activity.n}
+              style={{width:"56%",height:"56%",objectFit:"cover",borderRadius:"16%"}}/>
+            :<div style={{fontSize:"clamp(24px,9vmin,48px)",lineHeight:1}}>{activity.e}</div>}
+          <div style={{fontSize:"clamp(7px,2vmin,11px)",fontWeight:800,
+            textAlign:"center",padding:"0 4px",color:T.text,lineHeight:1.2}}>{activity.n}</div>
+          <div style={{fontSize:"clamp(10px,2.4vmin,14px)",fontWeight:800,
+            color:T.dim,fontVariantNumeric:"tabular-nums"}}>{fmt(shownSecs)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ModoReloj({
   // estado compartido
@@ -21,6 +67,8 @@ export default function ModoReloj({
   wakeLockOn, setWakeLockOn,
   // Firebase — Bloque 2: solo ModoReloj recibe estos props
   fbUser, onConectar, onDesconectar, fbCargando, fbError, fbEsColegio,
+  // Picture-in-Picture
+  openPiPRef, onPipAvailable,
 }) {
   const dir = inverted ? -1 : 1;
   const baseWedge = WEDGE_COLORS.find(w=>w.k===wedgeKey).c;
@@ -33,6 +81,65 @@ export default function ModoReloj({
 
   const svgRef = useRef(null);
   const dragRef = useRef(false);
+
+  // ── Picture-in-Picture ──────────────────────────────────────────────────────
+  const pipWindowRef = useRef(null);
+  const pipRootRef   = useRef(null);
+  const [pipOpen, setPipOpen] = useState(false); // fuerza re-render al abrir/cerrar
+
+  const openPiP = useCallback(async () => {
+    if (pipWindowRef.current && !pipWindowRef.current.closed) {
+      pipWindowRef.current.focus(); return;
+    }
+    try {
+      const pipWin = await window.documentPictureInPicture.requestWindow({
+        width: 340, height: 380,
+      });
+      pipWindowRef.current = pipWin;
+      const style = pipWin.document.createElement("style");
+      style.textContent = "*{box-sizing:border-box;margin:0;padding:0}body{overflow:hidden;width:100%;height:100vh}";
+      pipWin.document.head.appendChild(style);
+      const container = pipWin.document.createElement("div");
+      container.style.cssText = "width:100%;height:100%";
+      pipWin.document.body.appendChild(container);
+      pipRootRef.current = createRoot(container);
+      setPipOpen(true);
+      pipWin.addEventListener("pagehide", () => {
+        pipWindowRef.current = null;
+        pipRootRef.current = null;
+        setPipOpen(false);
+      });
+    } catch(e) {}
+  }, []); // eslint-disable-line
+
+  // Registra openPiP con App.jsx y notifica disponibilidad; limpia al desmontar
+  useEffect(() => {
+    const available = "documentPictureInPicture" in window;
+    onPipAvailable?.(available);
+    if (available && openPiPRef) openPiPRef.current = openPiP;
+    return () => {
+      onPipAvailable?.(false);
+      if (openPiPRef) openPiPRef.current = null;
+      pipWindowRef.current?.close?.();
+    };
+  }, []); // eslint-disable-line
+
+  // Sincroniza contenido PiP en cada render (el timer llama setRemaining cada 200ms)
+  useEffect(() => {
+    if (!pipRootRef.current) return;
+    pipRootRef.current.render(
+      <MiniClock
+        lap1Angle={lap1Angle ?? 0}
+        lap2Angle={lap2Angle ?? 0}
+        lap2Secs={lap2Secs ?? 0}
+        wedgeColor={wedgeColor}
+        darkColor={darkenColor(wedgeColor)}
+        dir={dir}
+        activity={activity}
+        shownSecs={shownSecs ?? 0}
+      />
+    );
+  }); // eslint-disable-line — sin deps: corre en cada render para mantener PiP en sync
 
   const {
     totalSecs, remaining, running, done, setDone,

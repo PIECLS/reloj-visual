@@ -20,6 +20,10 @@ export default function App() {
     try { screen.orientation.lock("portrait").catch(() => {}); } catch(e) {}
   }, []);
 
+  // ---- Picture-in-Picture (Document PiP API) ----
+  const openPiPRef = useRef(null);   // ModoReloj registra aquí su función openPiP
+  const [pipAvailable, setPipAvailable] = useState(false);
+
   // ---- Firebase Auth — Bloque 1 (solo Reloj lo usa) ----
   const { user: fbUser, conectar: fbConectar, desconectar: fbDesconectar,
           cargando: fbCargando, error: fbError, esColegio: fbEsColegio } = useAuth();
@@ -346,6 +350,17 @@ export default function App() {
               </button>
             ))}
           </div>
+          {pipAvailable && modo === "reloj" && (
+            <button className="btn ghost rv-fs-btn" title="Ventana flotante (PiP)"
+              onClick={() => openPiPRef.current?.()}>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor"
+                xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="1" y="3" width="16" height="12" rx="2" fill="none"
+                  stroke="currentColor" strokeWidth="1.5"/>
+                <rect x="9" y="8" width="7" height="5" rx="1"/>
+              </svg>
+            </button>
+          )}
           <button className="btn ghost rv-fs-btn"
             title="Pantalla completa"
             onClick={()=>{
@@ -359,6 +374,7 @@ export default function App() {
       {modo==="reloj"    && <ModoReloj    {...sharedProps}
         fbUser={fbUser} onConectar={fbConectar} onDesconectar={fbDesconectar}
         fbCargando={fbCargando} fbError={fbError} fbEsColegio={fbEsColegio}
+        openPiPRef={openPiPRef} onPipAvailable={setPipAvailable}
       />}
       {modo==="semaforo" && <ModoSemaforo {...sharedProps}/>}
       {modo==="tareas"   && <ModoTareas   {...sharedProps}
