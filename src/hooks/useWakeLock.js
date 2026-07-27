@@ -6,17 +6,22 @@ export default function useWakeLock(enabled) {
 
   const request = async () => {
     if (!enabled || !("wakeLock" in navigator)) return;
+    // Si ya hay un lock activo no lo re-solicitamos
+    if (lockRef.current && !lockRef.current.released) return;
     try {
-      lockRef.current = await navigator.wakeLock.request("screen");
+      const lock = await navigator.wakeLock.request("screen");
+      lockRef.current = lock;
       setActive(true);
-      lockRef.current.addEventListener("release", () => setActive(false));
-    } catch (e) {
-      // navegador denegó o no soporta — degradación silenciosa
-    }
+      lock.addEventListener("release", () => {
+        // Puede dispararse cuando la pestaña se oculta (iOS/Android)
+        lockRef.current = null;
+        setActive(false);
+      });
+    } catch (e) {}
   };
 
   useEffect(() => {
-    request();
+    if (enabled) request();
 
     const onVisibility = () => {
       if (document.visibilityState === "visible") request();
@@ -25,8 +30,10 @@ export default function useWakeLock(enabled) {
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
-      lockRef.current?.release().catch(() => {});
-      lockRef.current = null;
+      if (lockRef.current) {
+        lockRef.current.release().catch(() => {});
+        lockRef.current = null;
+      }
       setActive(false);
     };
   }, [enabled]); // eslint-disable-line
