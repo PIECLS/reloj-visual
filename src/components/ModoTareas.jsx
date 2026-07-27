@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, fmt } from "../shared";
+import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, fmt, darkenColor } from "../shared";
 import useTimer from "../hooks/useTimer";
 import AjustesComunes from "./AjustesComunes";
 import PanelRadial from "./PanelRadial";
@@ -162,7 +162,7 @@ export default function ModoTareas({
     setTareas(nuevasTareas);
     setTareaActiva(0);
     // Siempre carga el tiempo de la primera tarea — visTiempo solo afecta la pantalla
-    loadMinutes(Math.min(60, rutina.pasos[0]?.mins ?? 1), false);
+    loadMinutes(Math.min(120, rutina.pasos[0]?.mins ?? 1), false);
     setModalRutina(false);
   };
 
@@ -194,9 +194,14 @@ export default function ModoTareas({
   const wedgeColor = warnState === "w1" ? T.warn1 : warnState === "w5" ? T.warn5 : baseWedge;
   // shownSecs: en modo "Queda" muestra tiempo acumulado si corresponde; en "Llevo" solo la tarea actual
   const shownSecs  = viewMode === "restante" ? remaining + futureSecs : totalSecs - remaining;
-  // wedgeAngle: el arco siempre refleja el tiempo restante (incluyendo acumulado si aplica)
-  const wedgeAngle = Math.min(360, (remaining + futureSecs) / 10);
-  const handlePos  = polar(wedgeAngle, dir);
+  // El anillo muestra remaining+futureSecs, visualmente capeado en 120 min (2 vueltas)
+  const ringSecs   = Math.min(remaining + futureSecs, 7200);
+  const lap1Secs   = Math.min(ringSecs, 3600);
+  const lap2Secs   = Math.max(0, ringSecs - 3600);
+  const lap1Angle  = lap1Secs / 10;
+  const lap2Angle  = lap2Secs / 10;
+  const handleAngle = lap2Secs > 0 ? lap2Angle : lap1Angle;
+  const handlePos  = polar(handleAngle, dir);
 
   const ticks = [], numbers = [];
   for (let i = 0; i < 60; i++) {
@@ -226,15 +231,25 @@ export default function ModoTareas({
     if (running) return;
     dragRef.current = true;
     ev.currentTarget.setPointerCapture?.(ev.pointerId);
-    setMinutes(getAngle(ev) / 6);
+    const a = getAngle(ev);
+    if(totalSecs > 3600) setMinutes(a/6 + 60);
+    else setMinutes(a/6);
   };
   const onPointerMove = (ev) => {
     if (!dragRef.current || running) return;
     const a = getAngle(ev), cur = totalSecs / 60;
     let m = a / 6;
-    if (cur > 50 && m < 5) m = 60;
-    if (cur < 10 && m > 55) m = 1;
-    setMinutes(m);
+    if(cur > 60) {
+      let extra = m;
+      if(cur > 110 && extra < 5) extra = 60;
+      if(cur < 65  && extra > 55) extra = 0;
+      setMinutes(extra + 60);
+    } else {
+      if(cur >= 60 && m < 2) { setMinutes(61); return; }
+      if(cur > 50 && m < 5) m = 60;
+      if(cur < 10 && m > 55) m = 1;
+      setMinutes(m);
+    }
   };
   const onPointerUp = () => { dragRef.current = false; };
 
@@ -292,8 +307,11 @@ export default function ModoTareas({
               onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
               <circle cx={CX} cy={CY} r={R} fill={T.panel} stroke={T.line} strokeWidth="2"/>
               {ticks}{numbers}
-              <path d={wedgePath(wedgeAngle, dir)} fill={wedgeColor} opacity={.92}
+              <path d={wedgePath(lap1Angle, dir)} fill={wedgeColor} opacity={.92}
                 style={{transition: reducedMotion ? "none" : "fill .5s"}}/>
+              {lap2Secs > 0 && (
+                <path d={wedgePath(lap2Angle, dir)} fill={darkenColor(wedgeColor)} opacity={.92}/>
+              )}
               <line x1={CX} y1={CY} x2={handlePos.x} y2={handlePos.y}
                 stroke={T.text} strokeWidth="3" strokeLinecap="round" opacity=".85"/>
               <circle cx={handlePos.x} cy={handlePos.y} r="24" fill="transparent"
@@ -326,7 +344,7 @@ export default function ModoTareas({
               <button className={viewMode === "transcurrido" ? "on" : ""}
                 onClick={() => setViewMode("transcurrido")}>Llevo</button>
             </div>
-            <input className="rv-input" type="number" min="1" max="60"
+            <input className="rv-input" type="number" min="1" max="120"
               value={minInput} disabled={running} inputMode="numeric" aria-label="Minutos"
               onChange={e => setMinInput(e.target.value)}
               onBlur={() => setMinutes(Number(minInput) || 1)}

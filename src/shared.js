@@ -60,6 +60,13 @@ export const fmt=(s)=>{
   return `${m}:${String(ss).padStart(2,"0")}`;
 };
 
+export function darkenColor(hex, amount=0.30) {
+  const r=Math.max(0,Math.round(parseInt(hex.slice(1,3),16)*(1-amount)));
+  const g=Math.max(0,Math.round(parseInt(hex.slice(3,5),16)*(1-amount)));
+  const b=Math.max(0,Math.round(parseInt(hex.slice(5,7),16)*(1-amount)));
+  return `#${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
+}
+
 // ---- Audio ----
 let audioCtx=null;
 export function tone(freq,dur,gainV,type="sine",when=0){

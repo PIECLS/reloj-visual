@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, fmt } from "../shared";
+import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, fmt, darkenColor } from "../shared";
 import useTimer from "../hooks/useTimer";
 import ModalPicker from "./ModalPicker";
 import ModalRutina from "./ModalRutina";
 import ModalAjustes from "./ModalAjustes";
+import ModalBiblioteca from "./ModalBiblioteca";
+import PanelRadial from "./PanelRadial";
 
 export default function ModoReloj({
   // estado compartido
@@ -17,6 +19,8 @@ export default function ModoReloj({
   speechOn, setSpeechOn,
   activeHitos, toggleHito,
   wakeLockOn, setWakeLockOn,
+  // Firebase — Bloque 2: solo ModoReloj recibe estos props
+  fbUser, onConectar, onDesconectar, fbCargando, fbError, fbEsColegio,
 }) {
   const dir = inverted ? -1 : 1;
   const baseWedge = WEDGE_COLORS.find(w=>w.k===wedgeKey).c;
@@ -25,7 +29,7 @@ export default function ModoReloj({
   const [routine, setRoutine] = useState([]);
   const [stepIdx, setStepIdx] = useState(-1);
   const [viewMode, setViewMode] = useState("restante");
-  const [modal, setModal] = useState(null);
+  const [modal, setModal] = useState(null); // "picker"|"routine"|"settings"|"biblioteca"
 
   const svgRef = useRef(null);
   const dragRef = useRef(false);
@@ -70,23 +74,31 @@ export default function ModoReloj({
     if(running) return;
     dragRef.current = true;
     ev.currentTarget.setPointerCapture?.(ev.pointerId);
-    setMinutes(getAngle(ev)/6);
+    const a = getAngle(ev);
+    // Si ya estamos en segunda vuelta, el ángulo representa minutos extra sobre 60
+    if(totalSecs > 3600) setMinutes(a/6 + 60);
+    else setMinutes(a/6);
   };
   const onPointerMove = (ev) => {
     if(!dragRef.current||running) return;
     const a = getAngle(ev);
     const cur = totalSecs/60;
     let mins = a/6;
-    if(cur>50&&mins<5) mins=60;
-    if(cur<10&&mins>55) mins=1;
-    setMinutes(mins);
+    if(cur > 60) {
+      // Segunda vuelta: ángulo = minutos extra sobre 60
+      let extra = mins;
+      if(cur > 110 && extra < 5) extra = 60;   // ancla en 120 min
+      if(cur < 65  && extra > 55) extra = 0;   // vuelve a 60 min
+      setMinutes(extra + 60);
+    } else {
+      // Primera vuelta; cruzar 0° con cur≥60 inicia segunda vuelta
+      if(cur >= 60 && mins < 2) { setMinutes(61); return; }
+      if(cur > 50 && mins < 5) mins = 60;
+      if(cur < 10 && mins > 55) mins = 1;
+      setMinutes(mins);
+    }
   };
   const onPointerUp = () => { dragRef.current = false; };
-
-  const toggleFS = () => {
-    if(!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(()=>{});
-    else document.exitFullscreen?.();
-  };
 
   /* ---- estado visual ---- */
   const warn5On = activeHitos.m5;
@@ -97,9 +109,14 @@ export default function ModoReloj({
       : remaining<=300&&warn5On&&totalSecs>330 ? "w5" : "ok"
     : "ok";
   const wedgeColor = warnState==="w1"?T.warn1:warnState==="w5"?T.warn5:baseWedge;
-  const shownSecs = viewMode==="restante" ? remaining : totalSecs-remaining;
-  const wedgeAngle = (viewMode==="restante" ? remaining : totalSecs-remaining)/10;
-  const handlePos = polar(wedgeAngle,dir);
+  const shownSecs  = viewMode==="restante" ? remaining : totalSecs-remaining;
+  // Segunda vuelta: separa el arco en primera vuelta (≤60 min) y exceso
+  const lap1Secs   = Math.min(shownSecs, 3600);
+  const lap2Secs   = Math.max(0, shownSecs - 3600);
+  const lap1Angle  = lap1Secs / 10;          // 0–360°
+  const lap2Angle  = lap2Secs / 10;          // 0–360° (exceso sobre 60 min)
+  const handleAngle = lap2Secs > 0 ? lap2Angle : lap1Angle;
+  const handlePos  = polar(handleAngle, dir);
 
   const ticks = [];
   for(let i=0;i<60;i++){
@@ -125,7 +142,7 @@ export default function ModoReloj({
         <button className={viewMode==="restante"?"on":""} onClick={()=>setViewMode("restante")}>Queda</button>
         <button className={viewMode==="transcurrido"?"on":""} onClick={()=>setViewMode("transcurrido")}>Llevo</button>
       </div>
-      <input className="rv-input" type="number" min="1" max="60"
+      <input className="rv-input" type="number" min="1" max="120"
         value={minInput} disabled={running} inputMode="numeric" aria-label="Minutos"
         onChange={e=>setMinInput(e.target.value)}
         onBlur={()=>setMinutes(Number(minInput)||1)}
@@ -135,14 +152,20 @@ export default function ModoReloj({
     </>
   );
 
+  const panelButtons = [
+    { ico:"🖼️", label:"Actividad", onClick:()=>setModal("picker") },
+    { ico:"📋", label:"Rutina",    onClick:()=>setModal("routine") },
+    { ico:running?"⏸":"▶", label:running?"Pausar":"Comenzar", onClick:running?pause:start, isMain:true },
+    { ico:"↺",  label:"Reiniciar", onClick:reset },
+    { ico:"⚙️", label:"Ajustes",   onClick:()=>setModal("settings") },
+  ];
+
+  const fbProps = { fbUser, fbEsColegio, onAbrirBiblioteca: ()=>setModal("biblioteca") };
+
   return (
     <>
-      {/* ---- header botones (desktop) ---- */}
-      <div className="rv-hbtns">
-        <button className="btn" onClick={()=>setModal("routine")}>📋 Rutina</button>
-        <button className="btn" onClick={()=>setModal("settings")}>⚙️ Ajustes</button>
-        <button className="btn" onClick={toggleFS} title="Pantalla completa">⛶</button>
-      </div>
+      {/* ---- panel radial desktop ---- */}
+      <PanelRadial buttons={panelButtons} accent={wedgeColor} reducedMotion={reducedMotion}/>
 
       {/* ---- reloj ---- */}
       <div className="rv-stage">
@@ -159,8 +182,11 @@ export default function ModoReloj({
           onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <circle cx={CX} cy={CY} r={R} fill={T.panel} stroke={T.line} strokeWidth="2"/>
           {ticks}{numbers}
-          <path d={wedgePath(wedgeAngle,dir)} fill={wedgeColor} opacity={.92}
+          <path d={wedgePath(lap1Angle,dir)} fill={wedgeColor} opacity={.92}
             style={{transition:reducedMotion?"none":"fill .5s"}}/>
+          {lap2Secs > 0 && (
+            <path d={wedgePath(lap2Angle,dir)} fill={darkenColor(wedgeColor)} opacity={.92}/>
+          )}
           <line x1={CX} y1={CY} x2={handlePos.x} y2={handlePos.y}
             stroke={T.text} strokeWidth="3" strokeLinecap="round" opacity=".85"/>
           <circle cx={handlePos.x} cy={handlePos.y} r="24"
@@ -262,6 +288,7 @@ export default function ModoReloj({
           onRename={onRenameCustom}
           onRemove={onRemoveCustom}
           onAddCustomPicto={onAddCustomPicto}
+          {...fbProps}
         />
       )}
 
@@ -272,6 +299,7 @@ export default function ModoReloj({
           savedRoutines={savedRoutines} setSavedRoutines={setSavedRoutines}
           onClose={()=>setModal(null)}
           onStart={()=>{ if(!routine.length) return; setModal(null); loadStep(0,false); }}
+          {...fbProps}
         />
       )}
 
@@ -284,6 +312,24 @@ export default function ModoReloj({
           speechOn={speechOn} setSpeechOn={setSpeechOn}
           activeHitos={activeHitos} toggleHito={toggleHito}
           wakeLockOn={wakeLockOn} setWakeLockOn={setWakeLockOn}
+          onClose={()=>setModal(null)}
+          fbUser={fbUser}
+          fbCargando={fbCargando}
+          fbError={fbError}
+          fbEsColegio={fbEsColegio}
+          onConectar={onConectar}
+          onDesconectar={onDesconectar}
+          onAbrirBiblioteca={()=>setModal("biblioteca")}
+        />
+      )}
+
+      {modal==="biblioteca"&&fbUser&&fbEsColegio&&(
+        <ModalBiblioteca
+          user={fbUser}
+          savedRoutines={savedRoutines}
+          setSavedRoutines={setSavedRoutines}
+          customPictos={customPictos}
+          onAddCustomPicto={onAddCustomPicto}
           onClose={()=>setModal(null)}
         />
       )}

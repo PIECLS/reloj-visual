@@ -31,7 +31,7 @@ export default function useTimer({ sound, activeHitos, speechOn }) {
   },[running]); // eslint-disable-line
 
   const setMinutes = (mins) => {
-    const m = Math.min(60,Math.max(1,Math.round(mins)));
+    const m = Math.min(120,Math.max(1,Math.round(mins)));
     const secs = m*60;
     setTotalSecs(secs); setRemaining(secs);
     prevRemRef.current = secs;
@@ -44,7 +44,7 @@ export default function useTimer({ sound, activeHitos, speechOn }) {
 
   // Carga minutos y opcionalmente arranca (usado por rutinas)
   const loadMinutes = (mins, autostart=false) => {
-    const m = Math.min(60,Math.max(1,Math.round(mins)));
+    const m = Math.min(120,Math.max(1,Math.round(mins)));
     const secs = m*60;
     setTotalSecs(secs); setRemaining(secs);
     prevRemRef.current = secs;
