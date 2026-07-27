@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { dbGetAll, dbPut, dbDelete } from "./db";
 import { T, WEDGE_COLORS, textOn } from "./shared";
 import useWakeLock from "./hooks/useWakeLock";
+import { useAuth } from "./hooks/useAuth";
 import ModoReloj from "./components/ModoReloj";
 import ModoSemaforo from "./components/ModoSemaforo";
 import ModoTareas from "./components/ModoTareas";
@@ -14,6 +15,14 @@ const MODOS = [
 
 export default function App() {
   const [modo, setModo] = useState("reloj");
+
+  useEffect(() => {
+    try { screen.orientation.lock("portrait").catch(() => {}); } catch(e) {}
+  }, []);
+
+  // ---- Firebase Auth — Bloque 1 (solo Reloj lo usa) ----
+  const { user: fbUser, conectar: fbConectar, desconectar: fbDesconectar,
+          cargando: fbCargando, error: fbError, esColegio: fbEsColegio } = useAuth();
 
   // ---- Ajustes compartidos ----
   const [wakeLockOn, setWakeLockOn] = useState(() => {
@@ -278,10 +287,12 @@ export default function App() {
     .rv-done h2{font-size:24px}
     .rv-done .next-row{display:flex;align-items:center;justify-content:center;gap:12px;font-size:17px;font-weight:800;margin:14px 0}
 
+    .rv-fs-btn{display:none}
     @media(max-width:640px){
       .rv-tabbar{display:flex}
       .rv-controls{display:none}
       .rv-hbtns{display:none}
+      .rv-radial-panel{display:none}
       .rv-stage{width:min(94vmin,420px);height:min(94vmin,420px);margin-top:4px}
       .rv-timepanel{
         display:flex;align-items:center;gap:10px;
@@ -290,6 +301,7 @@ export default function App() {
     }
     @media(min-width:641px){
       .rv-timepanel{display:none}
+      .rv-fs-btn{display:flex;align-items:center}
     }
   `;
 
@@ -334,13 +346,20 @@ export default function App() {
               </button>
             ))}
           </div>
-          {/* botones de modo reloj (desktop) */}
-          {modo==="reloj"&&<div id="rv-hbtns-slot"/>}
+          <button className="btn ghost rv-fs-btn"
+            title="Pantalla completa"
+            onClick={()=>{
+              if(!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(()=>{});
+              else document.exitFullscreen?.();
+            }}>⛶</button>
         </div>
       </div>
 
       {/* ---- modo activo ---- */}
-      {modo==="reloj"    && <ModoReloj    {...sharedProps}/>}
+      {modo==="reloj"    && <ModoReloj    {...sharedProps}
+        fbUser={fbUser} onConectar={fbConectar} onDesconectar={fbDesconectar}
+        fbCargando={fbCargando} fbError={fbError} fbEsColegio={fbEsColegio}
+      />}
       {modo==="semaforo" && <ModoSemaforo {...sharedProps}/>}
       {modo==="tareas"   && <ModoTareas   {...sharedProps}
         tWedgeKey={tWedgeKey} setTWedgeKey={setTWedgeKey}
