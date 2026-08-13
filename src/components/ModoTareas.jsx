@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, fmt, darkenColor } from "../shared";
+import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, arcSegPath, fmt, darkenColor } from "../shared";
 import useTimer from "../hooks/useTimer";
 import AjustesComunes from "./AjustesComunes";
 import PanelRadial from "./PanelRadial";
@@ -12,7 +12,7 @@ function guardarLS(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
 }
 
-const DEFAULTS_AJUSTES = { alTerminar: "avanzar", visTiempo: "tarea" };
+const DEFAULTS_AJUSTES = { alTerminar: "avanzar" };
 
 export default function ModoTareas({
   // props compartidos de App
@@ -40,22 +40,31 @@ export default function ModoTareas({
   // ---- tareas ----
   const [tareas,      setTareas]     = useState(() => cargarLS("rv-tareas", []));
   const [input,       setInput]      = useState("");
-  const [tareaActiva, setTareaActiva] = useState(-1); // índice de la tarea en curso
+  const [tareaActiva,     setTareaActiva]     = useState(() => cargarLS("rv-tareas-activa", -1));
+  const [tareaSeleccionada, setTareaSeleccionada] = useState(null); // id de tarea hecha con highlight visual
   const inputRef = useRef(null);
 
   useEffect(() => { guardarLS("rv-tareas", tareas); }, [tareas]);
+  useEffect(() => { guardarLS("rv-tareas-activa", tareaActiva); }, [tareaActiva]);
+
+  // Al montar (tras cambio de módulo), restaura el timer con el tiempo de la tarea activa
+  useEffect(() => {
+    const idx = cargarLS("rv-tareas-activa", -1);
+    const mins = tareas[idx]?.mins;
+    if (idx >= 0 && mins) loadMinutes(mins, false);
+  }, []); // eslint-disable-line — solo al montar
 
   // Cuando el timer termina y hay una tarea activa, aplica el comportamiento configurado
   useEffect(() => {
     if (!done || tareaActiva < 0) return;
-    const siguiente = tareaActiva + 1;
     if (ajustesTareas.alTerminar === "tachar") {
       setTareas(ts => ts.map((t, i) => i === tareaActiva ? { ...t, hecha: true } : t));
     }
-    if (siguiente < tareas.length) {
+    // Saltar tareas ya tachadas o sin tiempo asignado
+    const siguiente = tareas.findIndex((t, i) => i > tareaActiva && !t.hecha && t.mins);
+    if (siguiente >= 0) {
       setTareaActiva(siguiente);
-      const nextMins = tareas[siguiente]?.mins;
-      if (nextMins) loadMinutes(nextMins, true);
+      loadMinutes(tareas[siguiente].mins, true);
       setDone(false);
     }
     // Si no hay siguiente, deja el modal de "¡Tiempo terminado!" visible
@@ -68,7 +77,24 @@ export default function ModoTareas({
     setInput("");
     inputRef.current?.focus();
   };
-  const toggleHecha   = (id) => setTareas(t => t.map(x => x.id === id ? { ...x, hecha: !x.hecha } : x));
+  const toggleHecha = (id) => {
+    const idx = tareas.findIndex(t => t.id === id);
+    const nuevaHecha = !tareas[idx].hecha;
+    setTareas(ts => ts.map((t, i) => i === idx ? { ...t, hecha: nuevaHecha } : t));
+    // CAMBIO 1: tachar la tarea activa con tiempo → avanzar a la siguiente no-tachada
+    if (nuevaHecha && idx === tareaActiva && tareas[idx].mins) {
+      const siguiente = tareas.findIndex((t, i) => i > idx && !t.hecha && t.mins);
+      if (siguiente >= 0) {
+        setTareaActiva(siguiente);
+        loadMinutes(tareas[siguiente].mins, running);
+      } else {
+        setTareaActiva(-1);
+        pause();
+      }
+      setTareaSeleccionada(null);
+    }
+    // CAMBIO 2: destachar → futureSecs se recalcula automáticamente (incluye la tarea de nuevo)
+  };
   const eliminar      = (id) => {
     setTareas(t => {
       const nuevo = t.filter(x => x.id !== id);
@@ -81,6 +107,7 @@ export default function ModoTareas({
   const limpiarHechas = () => {
     setTareas(t => t.filter(x => !x.hecha));
     setTareaActiva(-1);
+    setTareaSeleccionada(null);
   };
 
   const handleReset = () => {
@@ -179,10 +206,18 @@ export default function ModoTareas({
   };
 
   // ---- reloj visual ----
-  // futureSecs: suma los minutos de tareas futuras cuando visTiempo="acumulado"
-  const futureSecs = ajustesTareas.visTiempo === "acumulado" && tareaActiva >= 0
-    ? tareas.slice(tareaActiva + 1).reduce((s, t) => s + (t.mins || 0) * 60, 0)
+  // Siempre acumulado: suma los minutos de todas las tareas futuras
+  const futureSecs = tareaActiva >= 0
+    ? tareas.slice(tareaActiva + 1).reduce((s, t) => s + (!t.hecha && t.mins ? t.mins * 60 : 0), 0)
     : 0;
+  // Tiempo consumido total (tareas pasadas + elapsed en tarea activa)
+  const pastTasksSecs    = tareaActiva > 0
+    ? tareas.slice(0, tareaActiva).reduce((s, t) => s + (t.mins || 0) * 60, 0)
+    : 0;
+  const activeElapsedSecs = tareaActiva >= 0 && tareas[tareaActiva]?.mins
+    ? Math.max(0, tareas[tareaActiva].mins * 60 - remaining)
+    : 0;
+  const consumedSecs = pastTasksSecs + activeElapsedSecs;
 
   const warn5On  = tActiveHitos.m5;
   const warn1On  = tActiveHitos.m1;
@@ -192,8 +227,8 @@ export default function ModoTareas({
       : remaining <= 300 && warn5On && totalSecs > 330 ? "w5" : "ok"
     : "ok";
   const wedgeColor = warnState === "w1" ? T.warn1 : warnState === "w5" ? T.warn5 : baseWedge;
-  // shownSecs: en modo "Queda" muestra tiempo acumulado si corresponde; en "Llevo" solo la tarea actual
-  const shownSecs  = viewMode === "restante" ? remaining + futureSecs : totalSecs - remaining;
+  // shownSecs: Queda = total restante (todas las tareas); Llevo = total consumido
+  const shownSecs  = viewMode === "restante" ? remaining + futureSecs : consumedSecs;
   // El anillo muestra remaining+futureSecs, visualmente capeado en 120 min (2 vueltas)
   const ringSecs   = Math.min(remaining + futureSecs, 7200);
   const lap1Secs   = Math.min(ringSecs, 3600);
@@ -232,23 +267,28 @@ export default function ModoTareas({
     dragRef.current = true;
     ev.currentTarget.setPointerCapture?.(ev.pointerId);
     const a = getAngle(ev);
-    if(totalSecs > 3600) setMinutes(a/6 + 60);
-    else setMinutes(a/6);
+    const futureMin = futureSecs / 60;
+    // ringSecs > 3600 → dial está en la segunda vuelta visual
+    const visMins = ringSecs > 3600 ? a / 6 + 60 : a / 6;
+    setMinutes(Math.max(1, visMins - futureMin));
   };
   const onPointerMove = (ev) => {
     if (!dragRef.current || running) return;
-    const a = getAngle(ev), cur = totalSecs / 60;
-    let m = a / 6;
-    if(cur > 60) {
-      let extra = m;
-      if(cur > 110 && extra < 5) extra = 60;
-      if(cur < 65  && extra > 55) extra = 0;
-      setMinutes(extra + 60);
+    const a = getAngle(ev);
+    const futureMin = futureSecs / 60;
+    // visCur: minutos visuales totales (tarea activa + futuras) para detectar en qué vuelta estamos
+    const visCur = (totalSecs + futureSecs) / 60;
+    let visMin = a / 6;
+    if (visCur > 60) {
+      let extra = visMin;
+      if (visCur > 110 && extra < 5) extra = 60;
+      if (visCur < 65  && extra > 55) extra = 0;
+      setMinutes(Math.max(1, extra + 60 - futureMin));
     } else {
-      if(cur >= 60 && m < 2) { setMinutes(61); return; }
-      if(cur > 50 && m < 5) m = 60;
-      if(cur < 10 && m > 55) m = 1;
-      setMinutes(m);
+      if (visCur >= 60 && visMin < 2) { setMinutes(Math.max(1, 61 - futureMin)); return; }
+      if (visCur > 50 && visMin < 5) visMin = 60;
+      if (visCur < 10 && visMin > 55) visMin = 1;
+      setMinutes(Math.max(1, visMin - futureMin));
     }
   };
   const onPointerUp = () => { dragRef.current = false; };
@@ -307,11 +347,68 @@ export default function ModoTareas({
               onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
               <circle cx={CX} cy={CY} r={R} fill={T.panel} stroke={T.line} strokeWidth="2"/>
               {ticks}{numbers}
-              <path d={wedgePath(lap1Angle, dir)} fill={wedgeColor} opacity={.92}
-                style={{transition: reducedMotion ? "none" : "fill .5s"}}/>
-              {lap2Secs > 0 && (
-                <path d={wedgePath(lap2Angle, dir)} fill={darkenColor(wedgeColor)} opacity={.92}/>
-              )}
+              {(() => {
+                // Sin tarea activa: arco único
+                if (tareaActiva < 0 || !tareas[tareaActiva]?.mins) {
+                  return (
+                    <>
+                      <path d={wedgePath(lap1Angle, dir)} fill={wedgeColor} opacity={.92}
+                        style={{transition: reducedMotion ? "none" : "fill .5s"}}/>
+                      {lap2Secs > 0 && (
+                        <path d={wedgePath(lap2Angle, dir)} fill={darkenColor(wedgeColor)} opacity={.92}/>
+                      )}
+                    </>
+                  );
+                }
+                // Orden correcto: [futuras N→1] cerca del 0°, [activa] junto al dial
+                // La activa SIEMPRE ocupa los últimos `remaining` segundos del anillo.
+                const futureShown = ringSecs - remaining; // segundos reservados para futuras
+
+                const futureTasks = [];
+                for (let i = tareaActiva + 1; i < tareas.length; i++) {
+                  if (tareas[i].mins && !tareas[i].hecha) futureTasks.push({ t: tareas[i], idx: i });
+                }
+
+                const segs = [];
+                let cum = 0;
+                // Futuras en orden inverso: la ÚLTIMA queda en el 0°, la PRIMERA junto a la activa
+                for (let fi = futureTasks.length - 1; fi >= 0 && cum < futureShown; fi--) {
+                  const { t, idx } = futureTasks[fi];
+                  const end = Math.min(cum + t.mins * 60, futureShown);
+                  segs.push({ secStart: cum, secEnd: end, idx });
+                  cum = end;
+                }
+                // Tarea activa: último segmento, siempre junto al dial
+                if (remaining > 0) {
+                  segs.push({ secStart: futureShown, secEnd: ringSecs, idx: tareaActiva });
+                }
+
+                return segs.map((seg, ri) => {
+                  const isActive = seg.idx === tareaActiva;
+                  // Alternación contada desde la activa (posFromActive 0=activa, 1=future1, ...)
+                  // → future1 siempre contrasta con la activa
+                  const posFromActive = segs.length - 1 - ri;
+                  const shade = posFromActive % 2 === 1 ? darkenColor(baseWedge, 0.22) : baseWedge;
+                  const c1 = isActive ? wedgeColor : shade;
+                  const c2 = darkenColor(c1);
+                  const op = isActive ? 0.92 : 0.55;
+                  const l1s = Math.min(seg.secStart, 3600) / 10;
+                  const l1e = Math.min(seg.secEnd,   3600) / 10;
+                  const l2s = Math.max(seg.secStart - 3600, 0) / 10;
+                  const l2e = Math.max(seg.secEnd   - 3600, 0) / 10;
+                  return (
+                    <g key={seg.idx}>
+                      {l1e > l1s + 0.1 && (
+                        <path d={arcSegPath(l1s, l1e, dir)} fill={c1} opacity={op}
+                          style={{transition: isActive && !reducedMotion ? "fill .5s" : "none"}}/>
+                      )}
+                      {l2e > l2s + 0.1 && (
+                        <path d={arcSegPath(l2s, l2e, dir)} fill={c2} opacity={op}/>
+                      )}
+                    </g>
+                  );
+                });
+              })()}
               <line x1={CX} y1={CY} x2={handlePos.x} y2={handlePos.y}
                 stroke={T.text} strokeWidth="3" strokeLinecap="round" opacity=".85"/>
               <circle cx={handlePos.x} cy={handlePos.y} r="24" fill="transparent"
@@ -403,14 +500,15 @@ export default function ModoTareas({
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {tareas.map((t, idx) => {
               const esActiva = idx === tareaActiva;
+              const esSeleccionada = t.hecha && t.id === tareaSeleccionada;
               return (
                 <div key={t.id} style={{
                   display:"flex", alignItems:"center", gap:12,
                   background: t.hecha ? T.panel : T.bg,
-                  border:`1.5px solid ${esActiva ? baseWedge : T.line}`,
+                  border:`1.5px solid ${esSeleccionada ? baseWedge : esActiva ? baseWedge : T.line}`,
                   borderRadius:14, padding:"12px 14px",
                   transition:"background .2s, border-color .2s",
-                  boxShadow: esActiva ? `0 0 0 2px ${baseWedge}33` : "none",
+                  boxShadow: esSeleccionada ? `0 0 0 2px ${baseWedge}44` : esActiva ? `0 0 0 2px ${baseWedge}33` : "none",
                 }}>
                   <button onClick={() => toggleHecha(t.id)}
                     aria-label={t.hecha ? "Marcar pendiente" : "Marcar hecha"}
@@ -424,9 +522,12 @@ export default function ModoTareas({
                     {t.hecha && <span style={{color:"#fff",lineHeight:1}}>✓</span>}
                   </button>
 
-                  {/* Tarea clickable para activarla si tiene tiempo */}
-                  <div style={{flex:1, cursor: t.mins ? "pointer" : "default"}}
-                    onClick={() => t.mins && !t.hecha && activarTarea(idx)}>
+                  {/* Tarea clickable: si no-hecha → activar; si hecha → highlight visual (CAMBIO 3) */}
+                  <div style={{flex:1, cursor: (t.hecha || t.mins) ? "pointer" : "default"}}
+                    onClick={() => {
+                      if (t.hecha) setTareaSeleccionada(prev => prev === t.id ? null : t.id);
+                      else if (t.mins) { activarTarea(idx); setTareaSeleccionada(null); }
+                    }}>
                     <span style={{
                       fontSize:15, fontWeight:700,
                       color: t.hecha ? T.dim : esActiva ? T.text : T.text,
@@ -643,27 +744,6 @@ export default function ModoTareas({
                 </button>
               ))}
 
-              <p style={{color:T.dim,fontSize:13,fontWeight:700,margin:"16px 0 10px"}}>
-                Visualización del reloj
-              </p>
-              {[
-                { val:"tarea",     label:"Tiempo de la tarea actual",
-                  desc:"El reloj muestra solo el tiempo de la tarea en curso." },
-                { val:"acumulado", label:"Tiempo acumulado",
-                  desc:"El número muestra el tiempo restante de todas las tareas combinadas." },
-              ].map(op => (
-                <button key={op.val} onClick={() => setEditAjustes(prev => ({ ...prev, visTiempo: op.val }))}
-                  style={{
-                    width:"100%", textAlign:"left", padding:"12px 14px",
-                    marginBottom:8, borderRadius:14, cursor:"pointer",
-                    border:`1.5px solid ${editAjustes.visTiempo === op.val ? "#4A90D9" : T.line}`,
-                    background: editAjustes.visTiempo === op.val ? "#4A90D922" : T.panel,
-                    color:T.text, fontSize:13,
-                  }}>
-                  <div style={{fontWeight:800,marginBottom:3}}>{op.label}</div>
-                  <div style={{color:T.dim,fontSize:12}}>{op.desc}</div>
-                </button>
-              ))}
             </div>
 
             <button className="btn primary" style={{width:"100%",marginTop:14}}

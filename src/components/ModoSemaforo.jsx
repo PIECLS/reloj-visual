@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { T, textOn, playWarn, playEnd } from "../shared";
+import PanelRadial from "./PanelRadial";
 
 const DEFAULTS_TEXTOS = {
   verde:    { titulo:"Seguir",    subtitulo:"Todo bien, continúa" },
@@ -201,8 +202,15 @@ export default function ModoSemaforo({ sound, reducedMotion }) {
     C: "Sin avance automático",
   };
 
+  const panelButtons = [
+    { ico:running?"⏸":"▶", label:running?"Pausar":"Comenzar", onClick:running?pausar:iniciar, isMain:true },
+    { ico:"↺",  label:"Reiniciar", onClick:reiniciar },
+    { ico:"⚙️", label:"Ajustes",   onClick:abrirAjustes },
+  ];
+
   return (
     <>
+    <PanelRadial buttons={panelButtons} accent={luzActiva.color} reducedMotion={reducedMotion}/>
     <div style={{
       display:"flex", flexDirection:"column", alignItems:"center",
       justifyContent:"center", flex:1, padding:"16px 24px 80px",
@@ -317,16 +325,23 @@ export default function ModoSemaforo({ sound, reducedMotion }) {
                   {/* Duración */}
                   <div className="rv-row" style={{margin:"0 0 8px"}}>
                     <span className="rv-label" style={{minWidth:70}}>Duración</span>
-                    <input className="rv-input" type="number" min="1"
+                    <input className="rv-input" type="text" inputMode="numeric"
                       style={{width:64,textAlign:"center"}}
                       value={editConfig.duraciones[key].valor}
                       onChange={e => setEditConfig(prev => ({
                         ...prev,
                         duraciones: {
                           ...prev.duraciones,
-                          [key]: { ...prev.duraciones[key], valor: e.target.value },
+                          [key]: { ...prev.duraciones[key], valor: e.target.value.replace(/[^0-9]/g,"") },
                         },
-                      }))}/>
+                      }))}
+                      onBlur={e => {
+                        const v = Math.max(1, parseInt(e.target.value,10)||1);
+                        setEditConfig(prev => ({
+                          ...prev,
+                          duraciones: { ...prev.duraciones, [key]: { ...prev.duraciones[key], valor: v } },
+                        }));
+                      }}/>
                     <div className="rv-seg" style={{marginLeft:8}}>
                       <button
                         className={editConfig.duraciones[key].unidad === "seg" ? "on" : ""}

@@ -55,6 +55,16 @@ export function wedgePath(a, dir=1) {
   return `M ${CX} ${CY} L ${CX} ${CY-R} A ${R} ${R} 0 ${a>180?1:0} ${dir===1?1:0} ${p.x} ${p.y} Z`;
 }
 
+// Arco-sector de startAngle a endAngle (ángulos en grados, 0=12h, creciente = dir)
+export function arcSegPath(startAngle, endAngle, dir=1) {
+  const span = endAngle - startAngle;
+  if (span < 0.2) return "";
+  if (span >= 359.8) return `M ${CX} ${CY-R} A ${R} ${R} 0 1 1 ${CX-0.01} ${CY-R} Z`;
+  const p1 = polar(startAngle, dir);
+  const p2 = polar(endAngle,   dir);
+  return `M ${CX} ${CY} L ${p1.x} ${p1.y} A ${R} ${R} 0 ${span>180?1:0} ${dir===1?1:0} ${p2.x} ${p2.y} Z`;
+}
+
 export const fmt=(s)=>{
   const m=Math.floor(s/60), ss=Math.floor(s%60);
   return `${m}:${String(ss).padStart(2,"0")}`;

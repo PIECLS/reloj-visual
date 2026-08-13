@@ -17,16 +17,24 @@ function MiniClock({ lap1Angle, lap2Angle, lap2Secs, wedgeColor, darkColor, dir,
     ticks.push(<line key={i} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
       stroke={T.dim} strokeWidth={major?2.4:1} opacity={major?.9:.45}/>);
   }
+  const numbers = [];
+  for(let m=0;m<60;m+=5){
+    const p=polar(m*6,dir,R+30);
+    numbers.push(<text key={m} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle"
+      fontSize="15" fontWeight="700" fill={T.dim}>{m===0?"0":m}</text>);
+  }
   return (
     <div style={{
       width:"100%",height:"100vh",display:"flex",flexDirection:"column",
       alignItems:"center",justifyContent:"center",background:T.bg,
-      fontFamily:"ui-rounded,'Segoe UI',system-ui,sans-serif",padding:8,
+      fontFamily:"ui-rounded,'Segoe UI',system-ui,sans-serif",
     }}>
-      <div style={{position:"relative",width:"100%",flex:1,minHeight:0}}>
+      {/* Cuadrado inscrito en la ventana — mantiene ratio 1:1 al redimensionar */}
+      <div style={{position:"relative",width:"min(100vw,100vh)",height:"min(100vw,100vh)",flexShrink:0}}>
         <svg viewBox="0 0 400 400" style={{width:"100%",height:"100%",display:"block"}}>
           <circle cx={CX} cy={CY} r={R} fill={T.panel} stroke={T.line} strokeWidth="2"/>
           {ticks}
+          {numbers}
           <path d={wedgePath(lap1Angle,dir)} fill={wedgeColor} opacity={.92}/>
           {lap2Secs>0&&<path d={wedgePath(lap2Angle,dir)} fill={darkColor} opacity={.92}/>}
           <circle cx={CX} cy={CY} r="6" fill={T.text}/>
@@ -93,7 +101,7 @@ export default function ModoReloj({
     }
     try {
       const pipWin = await window.documentPictureInPicture.requestWindow({
-        width: 340, height: 380,
+        width: 320, height: 320,
       });
       pipWindowRef.current = pipWin;
       const style = pipWin.document.createElement("style");

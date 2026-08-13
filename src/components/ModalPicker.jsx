@@ -18,6 +18,8 @@ async function urlABase64(url) {
 export default function ModalPicker({
   customPictos, onSelect, onClose, onUploadClick,
   onRename, onRemove, onAddCustomPicto,
+  // Firebase — opcionales; solo se muestran si el usuario está conectado
+  fbUser, fbEsColegio, onAbrirBiblioteca,
 }) {
   const [tab, setTab]           = useState("local");
   const [query, setQuery]       = useState("");
@@ -68,10 +70,11 @@ export default function ModalPicker({
       const keyword = picto.keywords?.[0]?.keyword ?? "Pictograma";
       const base64  = await urlABase64(ARASAAC_IMG(picto._id));
       const nuevo   = {
-        id:     Date.now() + Math.random(),
-        img:    base64,
-        n:      keyword,
-        origen: "arasaac",
+        id:       Date.now() + Math.random(),
+        img:      base64,
+        n:        keyword,
+        origen:   "arasaac",
+        arasaacId: picto._id,  // necesario para reconstrucción cross-device
       };
       onAddCustomPicto(nuevo);
       setGuardadoOk(true);
@@ -158,6 +161,14 @@ export default function ModalPicker({
               <p className="rv-note">
                 Las imágenes se guardan en este dispositivo. Toca el nombre para editarlo.
               </p>
+
+              {/* Acceso contextual a la biblioteca — solo si ya está conectado */}
+              {fbUser && fbEsColegio && onAbrirBiblioteca && (
+                <button className="btn" style={{ width: "100%", marginTop: 6, fontSize: 13 }}
+                  onClick={() => { onClose(); onAbrirBiblioteca(); }}>
+                  ☁️ Explorar biblioteca del equipo
+                </button>
+              )}
             </>
           ) : (
             <>

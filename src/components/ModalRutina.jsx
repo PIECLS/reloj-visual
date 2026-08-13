@@ -5,6 +5,8 @@ export default function ModalRutina({
   routine, setRoutine, customPictos,
   savedRoutines, setSavedRoutines,
   onClose, onStart,
+  // Firebase — opcionales; solo se muestran si el usuario está conectado
+  fbUser, fbEsColegio, onAbrirBiblioteca,
 }) {
   const [draft, setDraft] = useState({ key:"p3", mins:10 });
   const [routineName, setRoutineName] = useState("");
@@ -63,7 +65,8 @@ export default function ModalRutina({
           </select>
           <input className="rv-input" type="number" min="1" max="60"
             inputMode="numeric" value={draft.mins}
-            onChange={e=>setDraft({...draft,mins:Number(e.target.value)})}/>
+            onChange={e=>setDraft({...draft,mins:e.target.value})}
+            onBlur={e=>{const v=Math.min(60,Math.max(1,Number(e.target.value)||1));setDraft({...draft,mins:v});}}/>
           <span style={{color:T.dim,fontWeight:800,fontSize:13}}>min</span>
           <button className="btn" onClick={addStep}>+</button>
         </div>
@@ -107,11 +110,17 @@ export default function ModalRutina({
           </>
         )}
 
-        <div style={{display:"flex",gap:10,marginTop:14}}>
+        <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap"}}>
           <button className="btn primary" style={{flex:1}} onClick={onStart} disabled={!routine.length}>
             ▶ Iniciar rutina
           </button>
           <button className="btn" onClick={()=>{setRoutine([]);}}>Limpiar</button>
+          {fbUser && fbEsColegio && onAbrirBiblioteca && (
+            <button className="btn" style={{fontSize:12}}
+              onClick={()=>{ onClose(); onAbrirBiblioteca(); }}>
+              ☁️ Biblioteca
+            </button>
+          )}
           <button className="btn" onClick={onClose}>Cerrar</button>
         </div>
       </div>
