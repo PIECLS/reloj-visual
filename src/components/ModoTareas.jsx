@@ -501,14 +501,16 @@ export default function ModoTareas({
             {tareas.map((t, idx) => {
               const esActiva = idx === tareaActiva;
               const esSeleccionada = t.hecha && t.id === tareaSeleccionada;
+              // Solo un indicador activo a la vez: si hay tachada seleccionada, la activa no resalta
+              const resaltada = esSeleccionada || (esActiva && !tareaSeleccionada);
               return (
                 <div key={t.id} style={{
                   display:"flex", alignItems:"center", gap:12,
                   background: t.hecha ? T.panel : T.bg,
-                  border:`1.5px solid ${esSeleccionada ? baseWedge : esActiva ? baseWedge : T.line}`,
+                  border:`1.5px solid ${resaltada ? baseWedge : T.line}`,
                   borderRadius:14, padding:"12px 14px",
                   transition:"background .2s, border-color .2s",
-                  boxShadow: esSeleccionada ? `0 0 0 2px ${baseWedge}44` : esActiva ? `0 0 0 2px ${baseWedge}33` : "none",
+                  boxShadow: resaltada ? `0 0 0 2px ${baseWedge}${esSeleccionada ? "44" : "33"}` : "none",
                 }}>
                   <button onClick={() => toggleHecha(t.id)}
                     aria-label={t.hecha ? "Marcar pendiente" : "Marcar hecha"}
