@@ -341,7 +341,7 @@ export default function ModoTareas({
 
           <div style={{position:"relative", width:"100%", aspectRatio:"1"}}>
             <svg ref={svgRef}
-              style={{width:"100%",height:"100%",display:"block",touchAction:"none"}}
+              style={{width:"100%",height:"100%",display:"block",touchAction:"none",userSelect:"none",WebkitUserSelect:"none"}}
               viewBox="0 0 400 400"
               onPointerDown={onPointerDown} onPointerMove={onPointerMove}
               onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>

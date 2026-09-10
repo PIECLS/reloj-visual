@@ -31,7 +31,7 @@ function MiniClock({ lap1Angle, lap2Angle, lap2Secs, wedgeColor, darkColor, dir,
     }}>
       {/* Cuadrado inscrito en la ventana — mantiene ratio 1:1 al redimensionar */}
       <div style={{position:"relative",width:"min(100vw,100vh)",height:"min(100vw,100vh)",flexShrink:0}}>
-        <svg viewBox="0 0 400 400" style={{width:"100%",height:"100%",display:"block"}}>
+        <svg viewBox="0 0 400 400" style={{width:"100%",height:"100%",display:"block",userSelect:"none",WebkitUserSelect:"none"}}>
           <circle cx={CX} cy={CY} r={R} fill={T.panel} stroke={T.line} strokeWidth="2"/>
           {ticks}
           {numbers}

@@ -158,7 +158,7 @@ export default function App() {
       width:min(88vmin,520px);height:min(88vmin,520px);
       flex-shrink:0;
     }
-    .rv-svg{width:100%;height:100%;display:block;touch-action:none}
+    .rv-svg{width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
     .rv-center{
       position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
       width:38%;height:38%;border-radius:50%;
