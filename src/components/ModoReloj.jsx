@@ -2,10 +2,12 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { T, WEDGE_COLORS, textOn, CX, CY, R, polar, wedgePath, fmt, darkenColor } from "../shared";
 import useTimer from "../hooks/useTimer";
+import useHorarioRecreos, { calcularEstado } from "../hooks/useHorarioRecreos";
 import ModalPicker from "./ModalPicker";
 import ModalRutina from "./ModalRutina";
 import ModalAjustes from "./ModalAjustes";
 import ModalBiblioteca from "./ModalBiblioteca";
+import ModalHorario from "./ModalHorario";
 import PanelRadial from "./PanelRadial";
 
 // ── Componente renderizado dentro de la ventana PiP ──────────────────────────
@@ -85,7 +87,11 @@ export default function ModoReloj({
   const [routine, setRoutine] = useState([]);
   const [stepIdx, setStepIdx] = useState(-1);
   const [viewMode, setViewMode] = useState("restante");
-  const [modal, setModal] = useState(null); // "picker"|"routine"|"settings"|"biblioteca"
+  const [modal, setModal] = useState(null); // "picker"|"routine"|"settings"|"biblioteca"|"horario"
+
+  // ── Horario de recreos ───────────────────────────────────────────────────────
+  const horario = useHorarioRecreos();
+  const [horarioEstado, setHorarioEstado] = useState(null);
 
   const svgRef = useRef(null);
   const dragRef = useRef(false);
@@ -149,6 +155,18 @@ export default function ModoReloj({
     );
   }); // eslint-disable-line — sin deps: corre en cada render para mantener PiP en sync
 
+  // Actualiza horarioEstado cada segundo cuando el modo está activo
+  useEffect(() => {
+    if (!horario.modoHorario || !horario.horarioActivo) {
+      setHorarioEstado(null);
+      return;
+    }
+    const tick = () => setHorarioEstado(calcularEstado(horario.horarioActivo.recreos, new Date()));
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [horario.modoHorario, horario.horarioActivo]); // eslint-disable-line
+
   const {
     totalSecs, remaining, running, done, setDone,
     minInput, setMinInput, setMinutes, loadMinutes, start, pause, reset,
@@ -186,7 +204,7 @@ export default function ModoReloj({
     return a;
   };
   const onPointerDown = (ev) => {
-    if(running) return;
+    if(running || horario.modoHorario) return;
     dragRef.current = true;
     ev.currentTarget.setPointerCapture?.(ev.pointerId);
     const a = getAngle(ev);
@@ -195,7 +213,7 @@ export default function ModoReloj({
     else setMinutes(a/6);
   };
   const onPointerMove = (ev) => {
-    if(!dragRef.current||running) return;
+    if(!dragRef.current||running||horario.modoHorario) return;
     const a = getAngle(ev);
     const cur = totalSecs/60;
     let mins = a/6;
@@ -218,18 +236,36 @@ export default function ModoReloj({
   /* ---- estado visual ---- */
   const warn5On = activeHitos.m5;
   const warn1On = activeHitos.m1;
+
+  // En modo horario usa horarioEstado.secsLeft como referencia para los avisos
+  const hAuto   = horario.modoHorario && horarioEstado;
+  const hHaciaRecreo = hAuto && horarioEstado.tipo === "hacia_recreo";
+  const effRemaining = hHaciaRecreo ? horarioEstado.secsLeft : remaining;
+  const effTotal     = hHaciaRecreo ? horarioEstado.blockTotal : totalSecs;
+
   const warnState =
-    (running||remaining<totalSecs)
+    hHaciaRecreo
+      ? effRemaining <= 60  && warn1On && effTotal > 90  ? "w1"
+      : effRemaining <= 300 && warn5On && effTotal > 330 ? "w5" : "ok"
+    : (running||remaining<totalSecs)
       ? remaining<=60&&warn1On&&totalSecs>90 ? "w1"
       : remaining<=300&&warn5On&&totalSecs>330 ? "w5" : "ok"
     : "ok";
+
   const wedgeColor = warnState==="w1"?T.warn1:warnState==="w5"?T.warn5:baseWedge;
-  const shownSecs  = viewMode==="restante" ? remaining : totalSecs-remaining;
+
+  // shownSecs: en modo horario usa los segundos del estado en tiempo real
+  const shownSecs = hAuto
+    ? viewMode === "restante"
+      ? horarioEstado.secsLeft
+      : Math.max(0, horarioEstado.blockTotal - horarioEstado.secsLeft)
+    : viewMode === "restante" ? remaining : totalSecs - remaining;
+
   // Segunda vuelta: separa el arco en primera vuelta (≤60 min) y exceso
   const lap1Secs   = Math.min(shownSecs, 3600);
   const lap2Secs   = Math.max(0, shownSecs - 3600);
-  const lap1Angle  = lap1Secs / 10;          // 0–360°
-  const lap2Angle  = lap2Secs / 10;          // 0–360° (exceso sobre 60 min)
+  const lap1Angle  = lap1Secs / 10;
+  const lap2Angle  = lap2Secs / 10;
   const handleAngle = lap2Secs > 0 ? lap2Angle : lap1Angle;
   const handlePos  = polar(handleAngle, dir);
 
@@ -258,7 +294,8 @@ export default function ModoReloj({
         <button className={viewMode==="transcurrido"?"on":""} onClick={()=>setViewMode("transcurrido")}>Llevo</button>
       </div>
       <input className="rv-input" type="number" min="1" max="120"
-        value={minInput} disabled={running} inputMode="numeric" aria-label="Minutos"
+        value={hAuto ? Math.ceil(shownSecs/60) : minInput}
+        disabled={running || horario.modoHorario} inputMode="numeric" aria-label="Minutos"
         onChange={e=>setMinInput(e.target.value)}
         onBlur={()=>setMinutes(Number(minInput)||1)}
         onKeyDown={e=>e.key==="Enter"&&setMinutes(Number(minInput)||1)}/>
@@ -272,6 +309,7 @@ export default function ModoReloj({
     { ico:"📋", label:"Rutina",    onClick:()=>setModal("routine") },
     { ico:running?"⏸":"▶", label:running?"Pausar":"Comenzar", onClick:running?pause:start, isMain:true },
     { ico:"↺",  label:"Reiniciar", onClick:reset },
+    { ico:"🔔", label:"Recreos",   onClick:()=>setModal("horario"), ...(horario.modoHorario && { ico:"🔔" }) },
     { ico:"⚙️", label:"Ajustes",   onClick:()=>setModal("settings") },
   ];
 
@@ -284,7 +322,26 @@ export default function ModoReloj({
 
       {/* ---- reloj ---- */}
       <div className="rv-stage">
-        {warnState!=="ok"&&!done&&(
+        {/* Badge de estado — horario automático tiene prioridad */}
+        {hAuto && horarioEstado.tipo === "en_recreo" && (
+          <div className="rv-badge" style={{ background:"#46A877", color:"#fff" }}>
+            🏃 En recreo · termina en {fmt(horarioEstado.secsLeft)}
+          </div>
+        )}
+        {hAuto && horarioEstado.tipo === "sin_recreos" && (
+          <div className="rv-badge" style={{ background:T.panel, color:T.dim, border:`1px solid ${T.line}` }}>
+            ✅ No hay más recreos hoy
+          </div>
+        )}
+        {hAuto && horarioEstado.tipo === "hacia_recreo" && warnState !== "ok" && (
+          <div className="rv-badge" style={{
+            background:wedgeColor, color:textOn(wedgeColor),
+            animation: reducedMotion?"none":"rvpulse 1.6s ease-in-out infinite",
+          }}>
+            🔔 {warnState==="w1"?"¡Ya casi!":"Queda poco"} para el recreo
+          </div>
+        )}
+        {!hAuto && warnState!=="ok"&&!done&&(
           <div className="rv-badge" style={{
             background:wedgeColor, color:textOn(wedgeColor),
             animation: reducedMotion?"none":"rvpulse 1.6s ease-in-out infinite",
@@ -305,7 +362,7 @@ export default function ModoReloj({
           <line x1={CX} y1={CY} x2={handlePos.x} y2={handlePos.y}
             stroke={T.text} strokeWidth="3" strokeLinecap="round" opacity=".85"/>
           <circle cx={handlePos.x} cy={handlePos.y} r="24"
-            fill="transparent" style={{cursor:running?"default":"grab"}}/>
+            fill="transparent" style={{cursor:(running||horario.modoHorario)?"default":"grab"}}/>
           <circle cx={handlePos.x} cy={handlePos.y} r="13"
             fill={T.text} stroke={T.bg} strokeWidth="3" style={{pointerEvents:"none"}}/>
           <circle cx={CX} cy={CY} r="6" fill={T.text}/>
@@ -361,6 +418,9 @@ export default function ModoReloj({
         </button>
         <button className="tab" onClick={reset}>
           <span className="ico">↺</span>Reiniciar
+        </button>
+        <button className="tab" onClick={()=>setModal("horario")}>
+          <span className="ico">🔔</span>Recreos
         </button>
         <button className="tab" onClick={()=>setModal("settings")}>
           <span className="ico">⚙️</span>Ajustes
@@ -435,6 +495,13 @@ export default function ModoReloj({
           onConectar={onConectar}
           onDesconectar={onDesconectar}
           onAbrirBiblioteca={()=>setModal("biblioteca")}
+        />
+      )}
+
+      {modal==="horario"&&(
+        <ModalHorario
+          {...horario}
+          onClose={()=>setModal(null)}
         />
       )}
 
